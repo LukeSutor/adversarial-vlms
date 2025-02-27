@@ -71,76 +71,114 @@ def get_generation(processor, model, prompt, image_path):
     
 
 def pgd_attack_sequence(model, tokenizer, processor, prompt, image_path, 
-                        correct_sequence, target_sequence, 
-                        epsilon=0.02, alpha=0.01, num_iter=10):
+                        target_sequence, epsilon=0.02, alpha=0.01, num_iter=10):
+    """
+    PGD attack that optimizes an image to make a vision-language model generate a target sequence.
+    """
+    # Process the image and text prompt
+    if model.name_or_path == "Qwen/Qwen2-VL-2B-Instruct":
+        messages = [
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "image",
+                        "image": image_path,
+                    },
+                    {"type": "text", "text": prompt},
+                ],
+            }
+        ]
 
-    image = Image.open(image_path).convert("RGB")
-    model_inputs = processor(text=prompt, images=image, return_tensors="pt").to(model.device)
+        # Preparation for inference
+        text = processor.apply_chat_template(
+            messages, tokenize=False, add_generation_prompt=True
+        )
+        image_inputs, video_inputs = process_vision_info(messages)
+        model_inputs = processor(
+            text=[text],
+            images=image_inputs,
+            videos=video_inputs,
+            padding=True,
+            return_tensors="pt",
+        )
+        model_inputs = model_inputs.to(model.device)
+    else:
+        image = Image.open(image_path).convert("RGB")
+        model_inputs = processor(text=prompt, images=image, return_tensors="pt").to(model.device)
     
     # Set up for gradient tracking
     processed_image = model_inputs['pixel_values'].clone().detach().requires_grad_(True)
     model_inputs['pixel_values'] = processed_image
     original_image = processed_image.clone()
     
-    # Convert target sequences to token IDs
-    correct_token_ids = tokenizer.encode(correct_sequence, add_special_tokens=False)
+    # Convert target sequence to token IDs
     target_token_ids = tokenizer.encode(target_sequence, add_special_tokens=False)
+    
+    # Get information about the input sequence length
+    input_ids = model_inputs['input_ids'].clone()
     
     for i in range(num_iter):
         print(f"Iteration: {i}")
+        
         # Forward pass to get logits
         outputs = model(**model_inputs).logits
         
-        # Initialize loss
-        loss = 0
+        # Focus on the last position to predict the next token
+        last_position_logits = outputs[0, -1]  # Shape: [vocab_size]
         
-        # Process for autoregressive sequence prediction
-        # Method 1: Use the model's predicted tokens at each position
-        input_ids = model_inputs['input_ids'].clone()
-        seq_len = input_ids.shape[1]
+        # Calculate loss for the first token in target sequence
+        target_id = target_token_ids[0]
+        log_probs = torch.log_softmax(last_position_logits, dim=-1)
+        loss = -log_probs[target_id]  # Negative log likelihood
         
-        # Calculate loss across sequence positions (comparing correct vs target tokens)
-        for j, (correct_id, target_id) in enumerate(zip(correct_token_ids, target_token_ids)):
-            if seq_len + j >= outputs.shape[1]:
-                break  # Don't exceed sequence length
-                
-            # Get probabilities at this position
-            position_logits = outputs[0, seq_len + j - 1]  # -1 because we're predicting the next token
-            probs = torch.nn.functional.softmax(position_logits, dim=-1)
-            
-            # Print probabilities for monitoring
-            print(f"Position {j}: Correct token '{tokenizer.decode([correct_id])}' prob: {probs[correct_id].item():.4f}, "
-                  f"Target token '{tokenizer.decode([target_id])}' prob: {probs[target_id].item():.4f}")
-            
-            # Add to loss (minimize correct, maximize target)
-            loss = loss - position_logits[target_id] + position_logits[correct_id]
-        
-        # Alternative Method 2: Teacher forcing approach
-        # This forces the model to predict based on the target sequence
-        forced_inputs = model_inputs.copy()
-        
-        # For each position in the sequence:
-        # 1. Run the model to get the next token prediction
-        # 2. Calculate loss between that prediction and target token
-        # 3. Update the input sequence with the target token
-        # (Code for this approach would be more complex and model-specific)
+        # Print probabilities for monitoring
+        probs = torch.softmax(last_position_logits, dim=-1)
+        print(f"Target token '{tokenizer.decode([target_id])}' prob: {probs[target_id].item():.4f}")
+        top_token_id = torch.argmax(last_position_logits).item()
+        print(f"Top predicted: '{tokenizer.decode([top_token_id])}' prob: {probs[top_token_id].item():.4f}")
         
         # Backpropagate and update the image
         model.zero_grad()
         loss.backward()
         
         # PGD update
-        perturbation = alpha * torch.sign(processed_image.grad)
-        processed_image = processed_image + perturbation
-        perturbation = torch.clamp(processed_image - original_image, -epsilon, epsilon)
-        processed_image = torch.clamp(original_image + perturbation, 0, 1).detach().requires_grad_(True)
-        model_inputs['pixel_values'] = processed_image
+        if processed_image.grad is not None:
+            perturbation = -alpha * torch.sign(processed_image.grad)
+            processed_image = processed_image + perturbation
+            perturbation = torch.clamp(processed_image - original_image, -epsilon, epsilon)
+            processed_image = torch.clamp(original_image + perturbation, 0, 1).detach().requires_grad_(True)
+            model_inputs['pixel_values'] = processed_image
+        else:
+            print("Warning: No gradient calculated. Check if model supports backpropagation.")
 
-    # Process the final perturbed image as in your existing code
-    # [Your existing image processing code]
+    # Process the final perturbed image
     perturbed_image = processed_image.squeeze(0).permute(1, 2, 0).cpu().detach().numpy()
     
-    return perturbed_image, outputs
+    # Get final generation for verification (without gradients)
+    with torch.no_grad():
+        verify_inputs = model_inputs.copy()
+        verify_inputs['pixel_values'] = processed_image
+        
+        # Generate text to verify attack success
+        if model.name_or_path == "Qwen/Qwen2-VL-2B-Instruct":
+            generated_ids = model.generate(**verify_inputs, max_new_tokens=len(target_token_ids) + 10)
+            generated_ids_trimmed = [
+                out_ids[len(in_ids):] for in_ids, out_ids in zip(verify_inputs.input_ids, generated_ids)
+            ]
+            final_output = processor.batch_decode(
+                generated_ids_trimmed, skip_special_tokens=True, clean_up_tokenization_spaces=False
+            )[0]
+        else:
+            generated = model.generate(**verify_inputs, max_new_tokens=len(target_token_ids) + 10)
+            final_output = processor.decode(
+                generated[0][len(verify_inputs['input_ids'][0]):], skip_special_tokens=True
+            )
+        
+        print(f"Target sequence: {target_sequence}")
+        print(f"Generated output: {final_output}")
+    
+    return perturbed_image
 
 
 def pgd_attack(model, tokenizer, processor, prompt, image_path, target_token_idx, correct_answer, target_answer, epsilon=0.02, alpha=0.01, num_iter=10):
@@ -277,7 +315,7 @@ def load_model(model_id):
 
 if __name__ == "__main__":
     load_dotenv()
-    login(os.environ("HF_TOKEN"))
+    login(os.environ.get("HF_TOKEN"))
 
     # model_id = "Qwen/Qwen2-VL-2B-Instruct"
     model_id = "google/paligemma-3b-mix-224"
@@ -286,15 +324,17 @@ if __name__ == "__main__":
     tokenizer = AutoTokenizer.from_pretrained(model_id)
     processor = AutoProcessor.from_pretrained(model_id)
 
-    prompt = "What is the answer to this question? Answer with just the letter."
+    prompt = "Answer the question."
+    target_sequence = "3"
     image_path = "math_question.png"
     attack_image_file = "attack_image.png"
 
     attack = True
 
     if attack:
-        image, final_logits = pgd_attack(model, tokenizer, processor, prompt, image_path, -2, "b", "d", epsilon=0.0002, alpha=0.0001, num_iter=10)
-        print(final_logits)
+        print("Performing attack...")
+        # image, final_logits = pgd_attack(model, tokenizer, processor, prompt, image_path, -2, "b", "d", epsilon=0.0002, alpha=0.0001, num_iter=10)
+        image = pgd_attack_sequence(model, tokenizer, processor, prompt, image_path, target_sequence, epsilon=0.05, alpha=0.01, num_iter=30)
         save_image(image, attack_image_file)
 
     try:
