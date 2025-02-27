@@ -68,6 +68,145 @@ def get_generation(processor, model, prompt, image_path):
             decoded_original = processor.decode(final_generation, skip_special_tokens=True)
 
         return decoded_original
+
+
+def pgd_attack_sequence_advanced(model, tokenizer, processor, prompt, image_path, 
+                               target_sequence, epsilon=0.02, alpha=0.01, num_iter=10,
+                               token_lookahead=3):
+    """
+    Advanced PGD attack that optimizes an image to make a vision-language model generate
+    a target sequence by iteratively optimizing for each token in the sequence.
+    
+    Args:
+        model: The vision-language model
+        tokenizer: Tokenizer for the model
+        processor: Processor for the model
+        prompt: Text prompt to use with the image
+        image_path: Path to the input image
+        target_sequence: Target text sequence to generate
+        epsilon: Maximum perturbation magnitude (L-infinity norm)
+        alpha: Step size for PGD
+        num_iter: Number of PGD iterations
+        token_lookahead: Number of tokens ahead to optimize for
+    """
+    # Process the image and text prompt
+    image = Image.open(image_path).convert("RGB")
+    model_inputs = processor(text=prompt, images=image, return_tensors="pt").to(model.device)
+    
+    # Set up for gradient tracking
+    processed_image = model_inputs['pixel_values'].clone().detach().requires_grad_(True)
+    model_inputs['pixel_values'] = processed_image
+    original_image = processed_image.clone()
+    
+    # Convert target sequence to token IDs
+    target_token_ids = tokenizer.encode(target_sequence, add_special_tokens=False)
+    print(f"Target tokens: {[tokenizer.decode([tid]) for tid in target_token_ids]}")
+    
+    # Get input sequence length (where generation will start)
+    input_ids = model_inputs['input_ids'].clone()
+    seq_len = input_ids.shape[1]
+    
+    # Initialize momentum for more stable gradients
+    momentum = torch.zeros_like(processed_image.data)
+    
+    for i in range(num_iter):
+        print(f"=== Iteration {i+1}/{num_iter} ===")
+        
+        # Accumulate gradients over multiple tokens
+        model.zero_grad()
+        total_loss = 0
+        
+        # Create a working copy of inputs that we'll modify for sequential prediction
+        working_inputs = {k: v.clone() for k, v in model_inputs.items()}
+        working_inputs['pixel_values'] = processed_image
+        
+        # Number of tokens to optimize (limited by target sequence length)
+        n_tokens = min(token_lookahead, len(target_token_ids))
+        
+        # For each token position in the sequence (up to lookahead)
+        for j in range(n_tokens):
+            # Get target token for this position
+            target_id = target_token_ids[j]
+            
+            # Forward pass to get logits
+            outputs = model(**working_inputs)
+            
+            # Get logits for the last position (predicting next token)
+            position_logits = outputs.logits[0, -1]
+            
+            # Calculate loss for this token
+            log_probs = torch.log_softmax(position_logits, dim=-1)
+            token_loss = -log_probs[target_id]  # Negative log likelihood
+            total_loss = total_loss + token_loss
+            
+            # Print probabilities for monitoring
+            probs = torch.softmax(position_logits, dim=-1)
+            print(f"  Position {j}: Target '{tokenizer.decode([target_id])}' prob: {probs[target_id].item():.4f}")
+            top_token_id = torch.argmax(position_logits).item()
+            print(f"    Top predicted: '{tokenizer.decode([top_token_id])}' prob: {probs[top_token_id].item():.4f}")
+            
+            # For next token prediction, append this token to input
+            # Skip this step for the last token we're optimizing
+            if j < n_tokens - 1:
+                # Prepare for next token by adding current target token to the input sequence
+                new_token_tensor = torch.tensor([[target_id]], device=working_inputs['input_ids'].device)
+                working_inputs['input_ids'] = torch.cat([working_inputs['input_ids'], new_token_tensor], dim=1)
+                
+                # Also update attention mask if present
+                if 'attention_mask' in working_inputs:
+                    working_inputs['attention_mask'] = torch.cat(
+                        [working_inputs['attention_mask'], 
+                         torch.ones((1, 1), device=working_inputs['attention_mask'].device)], 
+                        dim=1
+                    )
+        
+        # Backpropagate the total loss
+        total_loss.backward()
+        
+        # PGD update with momentum
+        if processed_image.grad is not None:
+            # Update momentum term (helps stabilize optimization)
+            momentum = 0.9 * momentum - alpha * torch.sign(processed_image.grad)
+            
+            # Apply momentum update
+            processed_image = processed_image + momentum
+            
+            # Project back to epsilon ball and valid image range
+            perturbation = torch.clamp(processed_image - original_image, -epsilon, epsilon)
+            processed_image = torch.clamp(original_image + perturbation, 0, 1).detach().requires_grad_(True)
+            model_inputs['pixel_values'] = processed_image
+        else:
+            print("Warning: No gradient calculated. Check if model supports backpropagation.")
+
+    # Process the final perturbed image
+    perturbed_image = processed_image.squeeze(0).permute(1, 2, 0).cpu().detach().numpy()
+    
+    # Get final generation for verification (without gradients)
+    with torch.no_grad():
+        verify_inputs = {k: v.clone() for k, v in model_inputs.items()}
+        verify_inputs['pixel_values'] = processed_image
+        
+        # Generate text to verify attack success
+        if model.name_or_path == "Qwen/Qwen2-VL-2B-Instruct":
+            generated_ids = model.generate(**verify_inputs, max_new_tokens=len(target_token_ids) + 5)
+            generated_ids_trimmed = [
+                out_ids[len(in_ids):] for in_ids, out_ids in zip(verify_inputs.input_ids, generated_ids)
+            ]
+            final_output = processor.batch_decode(
+                generated_ids_trimmed, skip_special_tokens=True, clean_up_tokenization_spaces=False
+            )[0]
+        else:
+            generated = model.generate(**verify_inputs, max_new_tokens=len(target_token_ids) + 5)
+            final_output = processor.decode(
+                generated[0][len(verify_inputs['input_ids'][0]):], skip_special_tokens=True
+            )
+        
+        print("\nResults:")
+        print(f"Target sequence: '{target_sequence}'")
+        print(f"Generated output: '{final_output}'")
+        print(f"Match success: {target_sequence in final_output}")
+    
+    return perturbed_image, final_output
     
 
 def pgd_attack_sequence(model, tokenizer, processor, prompt, image_path, 
@@ -314,8 +453,8 @@ def load_model(model_id):
 
 
 if __name__ == "__main__":
-    load_dotenv()
-    login(os.environ.get("HF_TOKEN"))
+    # load_dotenv()
+    # login(os.environ.get("HF_TOKEN"))
 
     # model_id = "Qwen/Qwen2-VL-2B-Instruct"
     model_id = "google/paligemma-3b-mix-224"
@@ -325,16 +464,16 @@ if __name__ == "__main__":
     processor = AutoProcessor.from_pretrained(model_id)
 
     prompt = "Answer the question."
-    target_sequence = "3"
+    target_sequence = "A"
     image_path = "math_question.png"
     attack_image_file = "attack_image.png"
 
-    attack = True
+    attack = False
 
     if attack:
         print("Performing attack...")
         # image, final_logits = pgd_attack(model, tokenizer, processor, prompt, image_path, -2, "b", "d", epsilon=0.0002, alpha=0.0001, num_iter=10)
-        image = pgd_attack_sequence(model, tokenizer, processor, prompt, image_path, target_sequence, epsilon=0.05, alpha=0.01, num_iter=30)
+        image = pgd_attack_sequence(model, tokenizer, processor, prompt, image_path, target_sequence, epsilon=0.1, alpha=0.001, num_iter=100)
         save_image(image, attack_image_file)
 
     try:
