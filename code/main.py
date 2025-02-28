@@ -149,7 +149,14 @@ def pgd_attack_sequence_advanced(model, tokenizer, processor, prompt, image_path
             # Calculate loss for this token
             log_probs = torch.log_softmax(position_logits, dim=-1)
             token_loss = -log_probs[target_id]  # Negative log likelihood
-            total_loss = total_loss + token_loss
+
+            # Position weighting - focus strongly on first token with linear decay for subsequent tokens
+            # First token gets weight=token_lookahead, second gets token_lookahead-1, etc.
+            position_weight = max(float(token_lookahead - j), 0.5)  # Ensure minimum weight of 0.5
+            
+            # Add weighted loss to total
+            weighted_loss = token_loss * position_weight
+            total_loss = total_loss + weighted_loss
             
             # Print probabilities for monitoring
             probs = torch.softmax(position_logits, dim=-1)
@@ -389,7 +396,7 @@ if __name__ == "__main__":
     processor = AutoProcessor.from_pretrained(model_id)
 
     prompt = "Answer the question."
-    target_sequence = "A"
+    target_sequence = "hello"
     image_path = "math_question.png"
     attack_image_file = "attack_image.png"
 
@@ -398,7 +405,7 @@ if __name__ == "__main__":
     if attack:
         print("Performing attack...")
         # image = pgd_attack_sequence(model, tokenizer, processor, prompt, image_path, target_sequence, epsilon=0.1, alpha=0.001, num_iter=100)
-        image = pgd_attack_sequence_advanced(model, tokenizer, processor, prompt, image_path, target_sequence, epsilon=0.1, alpha=1e-4, num_iter=200)
+        image = pgd_attack_sequence_advanced(model, tokenizer, processor, prompt, image_path, target_sequence, epsilon=0.1, alpha=1e-4, num_iter=500)
         save_image(image, attack_image_file)
 
     try:
