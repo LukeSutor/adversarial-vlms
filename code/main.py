@@ -196,20 +196,29 @@ def pgd_attack_sequence_advanced(model, tokenizer, processor, prompt, image_path
             # Apply momentum update
             processed_image = processed_image + momentum
             
-            # Project back to epsilon ball and valid image range
+            # Project back to epsilon ball
             perturbation = torch.clamp(processed_image - original_image, -epsilon, epsilon)
-            processed_image = torch.clamp(original_image + perturbation, 0, 1).detach().requires_grad_(True)
+            processed_image = original_image + perturbation
             
-            # Simulate quantization to estimate its effect
-            quantized = (processed_image.clone().cpu() * 255).round() / 255
-            quantization_diff = processed_image.cpu() - quantized
-
-            # Save the processed image as the quantized version
-            model_inputs['pixel_values'] = quantized
-            
-            # Update noise standard deviation based on quantization error
-            noise_std = quantization_diff.std().item()
-            print(f"  Updated noise std: {noise_std:.5f}")
+            # Quantize directly to valid 8-bit values (multiples of 1/255)
+            with torch.no_grad():
+                # Round to nearest 8-bit pixel values
+                processed_image = torch.round(processed_image * 255) / 255
+                
+                # Ensure values stay in valid range after rounding
+                processed_image = torch.clamp(processed_image, 0, 1)
+                
+                # Since we're using discrete pixel values, small noise is still useful
+                # but we can use a smaller fixed value
+                noise_std = 0.003
+                
+                # Update model inputs with properly quantized image
+                model_inputs['pixel_values'] = processed_image.clone()
+                
+                # Prepare for next iteration
+                processed_image = processed_image.detach().requires_grad_(True)
+                
+            print(f"  Using quantized pixel values (1/255 steps) with noise std: {noise_std:.5f}")
         else:
             print("Warning: No gradient calculated.")
     
@@ -223,17 +232,17 @@ def pgd_attack_sequence_advanced(model, tokenizer, processor, prompt, image_path
     # Process the final perturbed image
     perturbed_image = processed_image.squeeze(0).permute(1, 2, 0).cpu().detach().numpy()
 
-    # Verify before saving (using direct tensor)
+    # Final image with simulated quantization (important for robustness)
+    perturbed_image = np.clip(perturbed_image * 255, 0, 255).round() / 255
+
+    # Verify before saving (using processed image)
     print("\nVerifying attack BEFORE saving image...")
     with torch.no_grad():
         verify_inputs = {k: v.clone() for k, v in model_inputs.items()}
-        verify_inputs['pixel_values'] = processed_image
+        verify_inputs['pixel_values'] = processed_image.clone()
         direct_output = model.generate(**verify_inputs, max_new_tokens=10)
         direct_result = processor.decode(direct_output[0][len(verify_inputs['input_ids'][0]):], skip_special_tokens=True)
         print(f"Direct model output (before save): {direct_result}")
-    
-    # Final image with simulated quantization (important for robustness)
-    perturbed_image = np.clip(perturbed_image * 255, 0, 255).round() / 255
     
     return perturbed_image
     
@@ -357,8 +366,8 @@ def save_image(perturbed_image, output_path="perturbed_image.png"):
     # Create PIL image from array
     image = Image.fromarray(perturbed_image)
     
-    # Save with minimal compression to preserve details
-    image.save(output_path, format='PNG', compress_level=0)
+    # Save with no compression to preserve details
+    image.save(output_path, format='PNG', compress_level=0, optimize=False)
     print(f"Saved attack image to {output_path}")
 
 
@@ -405,7 +414,7 @@ if __name__ == "__main__":
     if attack:
         print("Performing attack...")
         # image = pgd_attack_sequence(model, tokenizer, processor, prompt, image_path, target_sequence, epsilon=0.1, alpha=0.001, num_iter=100)
-        image = pgd_attack_sequence_advanced(model, tokenizer, processor, prompt, image_path, target_sequence, epsilon=0.1, alpha=1e-4, num_iter=500)
+        image = pgd_attack_sequence_advanced(model, tokenizer, processor, prompt, image_path, target_sequence, epsilon=0.1, alpha=0.01, num_iter=500)
         save_image(image, attack_image_file)
 
     try:
