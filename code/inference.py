@@ -4,17 +4,38 @@ from PIL import Image
 import torch
 import os
 from typing import Dict, Optional, Any, Union
+import shutil
+import pathlib
+
+# Default model cache directory
+DEFAULT_CACHE_DIR = "/blue/rcstudents/luke.sutor/adversarial-vlms/models/"
 
 class ModelManager:
     """Manages loading and caching of models to optimize VRAM usage."""
     
-    def __init__(self, device="cuda:0", dtype=torch.float16):
+    def __init__(self, device="cuda:0", dtype=torch.float16, cache_dir=DEFAULT_CACHE_DIR):
         self.device = device
         self.dtype = dtype
         self.current_model = None
         self.current_model_id = None
         self.current_tokenizer = None
         self.current_processor = None
+        self.cache_dir = cache_dir
+        
+        # Create cache directory if it doesn't exist
+        self._ensure_cache_directory()
+    
+    def set_cache_directory(self, new_cache_dir):
+        """Update the cache directory for model storage"""
+        self.cache_dir = new_cache_dir
+        self._ensure_cache_directory()
+        return self.cache_dir
+    
+    def _ensure_cache_directory(self):
+        """Make sure the cache directory exists"""
+        if not os.path.exists(self.cache_dir):
+            os.makedirs(self.cache_dir, exist_ok=True)
+            print(f"Created model cache directory: {self.cache_dir}")
     
     def get_model(self, model_id: str):
         """Get a model, loading it if necessary and unloading the previous model."""
@@ -51,41 +72,81 @@ class ModelManager:
     
     def _load_model(self, model_id: str):
         """Load a specific model, tokenizer, and processor."""
+        print(f"Loading model from cache directory: {self.cache_dir}")
+        model_short_name = model_id.split('/')[-1] if '/' in model_id else model_id
+        
         if "paligemma" in model_id.lower():
             # Note: Using float16 instead of bfloat16 for all PaliGemma models
             model = PaliGemmaForConditionalGeneration.from_pretrained(
                 model_id,
                 torch_dtype=self.dtype,
                 device_map=self.device,
+                cache_dir=self.cache_dir
             ).eval()
             
             # Use specific PaliGemmaProcessor for PaliGemma models
             if "paligemma2" in model_id.lower():
-                processor = PaliGemmaProcessor.from_pretrained(model_id)
+                processor = PaliGemmaProcessor.from_pretrained(model_id, cache_dir=self.cache_dir)
                 # For PaliGemma2 models, we still need a tokenizer for some operations
-                tokenizer = AutoTokenizer.from_pretrained(model_id)
+                tokenizer = AutoTokenizer.from_pretrained(model_id, cache_dir=self.cache_dir)
             else:
-                tokenizer = AutoTokenizer.from_pretrained(model_id)
-                processor = AutoProcessor.from_pretrained(model_id)
+                tokenizer = AutoTokenizer.from_pretrained(model_id, cache_dir=self.cache_dir)
+                processor = AutoProcessor.from_pretrained(model_id, cache_dir=self.cache_dir)
         elif "qwen2-vl" in model_id.lower():
             model = Qwen2VLForConditionalGeneration.from_pretrained(
                 model_id,
                 torch_dtype=self.dtype,
                 device_map=self.device,
+                cache_dir=self.cache_dir
             ).eval()
             
-            tokenizer = AutoTokenizer.from_pretrained(model_id)
-            processor = AutoProcessor.from_pretrained(model_id)
+            tokenizer = AutoTokenizer.from_pretrained(model_id, cache_dir=self.cache_dir)
+            processor = AutoProcessor.from_pretrained(model_id, cache_dir=self.cache_dir)
         else:
             raise ValueError(f"Unsupported model: {model_id}")
         
         return model, tokenizer, processor
+    
+    def get_model_path(self, model_id):
+        """Get the local path for a model"""
+        # This is a simplified approach - real path depends on transformers' internal naming
+        return os.path.join(self.cache_dir, model_id.replace('/', '--'))
+    
+    def clear_cache(self, model_id=None):
+        """
+        Remove cached model files to free disk space
+        If model_id is None, clears the entire cache directory
+        """
+        if model_id is None:
+            # Clear all cached models (dangerous, confirm first)
+            confirm = input(f"Are you sure you want to delete ALL models in {self.cache_dir}? (yes/no): ")
+            if confirm.lower() == 'yes':
+                for item in os.listdir(self.cache_dir):
+                    item_path = os.path.join(self.cache_dir, item)
+                    if os.path.isdir(item_path):
+                        shutil.rmtree(item_path)
+                    else:
+                        os.remove(item_path)
+                print(f"Cleared all cached models from {self.cache_dir}")
+        else:
+            # Clear specific model
+            model_path = self.get_model_path(model_id)
+            if os.path.exists(model_path):
+                shutil.rmtree(model_path)
+                print(f"Removed cached model: {model_id}")
+            else:
+                print(f"Model not found in cache: {model_id}")
 
 
-# Initialize the model manager as a singleton
-model_manager = ModelManager()
+# Initialize the model manager as a singleton with the default cache directory
+model_manager = ModelManager(cache_dir=DEFAULT_CACHE_DIR)
 
+# Function to change the cache directory
+def set_models_directory(new_directory):
+    """Set the directory where models will be cached"""
+    return model_manager.set_cache_directory(new_directory)
 
+# The rest of the functions remain the same
 def run_inference_paligemma(
     model_id: str,
     prompt: str,
