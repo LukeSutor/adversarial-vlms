@@ -1,4 +1,4 @@
-from transformers import AutoProcessor, AutoTokenizer, PaliGemmaForConditionalGeneration, Qwen2VLForConditionalGeneration
+from transformers import AutoProcessor, AutoTokenizer, PaliGemmaForConditionalGeneration, Qwen2VLForConditionalGeneration, PaliGemmaProcessor
 from qwen_vl_utils import process_vision_info
 from PIL import Image
 import torch
@@ -52,23 +52,32 @@ class ModelManager:
     def _load_model(self, model_id: str):
         """Load a specific model, tokenizer, and processor."""
         if "paligemma" in model_id.lower():
+            # Note: Using float16 instead of bfloat16 for all PaliGemma models
             model = PaliGemmaForConditionalGeneration.from_pretrained(
                 model_id,
                 torch_dtype=self.dtype,
                 device_map=self.device,
-                revision="float16"
             ).eval()
+            
+            # Use specific PaliGemmaProcessor for PaliGemma models
+            if "paligemma2" in model_id.lower():
+                processor = PaliGemmaProcessor.from_pretrained(model_id)
+                # For PaliGemma2 models, we still need a tokenizer for some operations
+                tokenizer = AutoTokenizer.from_pretrained(model_id)
+            else:
+                tokenizer = AutoTokenizer.from_pretrained(model_id)
+                processor = AutoProcessor.from_pretrained(model_id)
         elif "qwen2-vl" in model_id.lower():
             model = Qwen2VLForConditionalGeneration.from_pretrained(
                 model_id,
                 torch_dtype=self.dtype,
                 device_map=self.device,
             ).eval()
+            
+            tokenizer = AutoTokenizer.from_pretrained(model_id)
+            processor = AutoProcessor.from_pretrained(model_id)
         else:
             raise ValueError(f"Unsupported model: {model_id}")
-        
-        tokenizer = AutoTokenizer.from_pretrained(model_id)
-        processor = AutoProcessor.from_pretrained(model_id)
         
         return model, tokenizer, processor
 
@@ -181,5 +190,24 @@ def run_inference(
 # Predefined model constants for convenience
 class Models:
     PALIGEMMA_3B = "google/paligemma-3b-mix-224"
+    PALIGEMMA2_3B = "google/paligemma2-3b-mix-224"
+    PALIGEMMA2_10B = "google/paligemma2-10b-mix-224"
+    PALIGEMMA2_28B = "google/paligemma2-28b-mix-224"
     QWEN2_VL_2B = "Qwen/Qwen2-VL-2B-Instruct"
     # More models can be added here as constants
+
+
+if __name__ == "__main__":
+    # Define the model ID and input parameters
+    model_id = Models.PALIGEMMA2_10B
+    prompt = "Answer the question"
+    image_path = "attack_image.png"
+    max_new_tokens = 100
+
+    # Run inference
+    try:
+        result = run_inference(model_id, prompt, image_path, max_new_tokens)
+        print("Generated Response:")
+        print(result)
+    except Exception as e:
+        print(f"An error occurred during inference: {e}")
