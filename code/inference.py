@@ -39,6 +39,8 @@ class ModelManager:
     
     def get_model(self, model_id: str):
         """Get a model, loading it if necessary and unloading the previous model."""
+        print("CURRENT MODEL", self.current_model_id)
+        print("LOADING MODEL", model_id)
         if self.current_model_id == model_id:
             return self.current_model, self.current_tokenizer, self.current_processor
         
@@ -136,8 +138,10 @@ class ModelManager:
             ).eval()
             
             processor = AutoProcessor.from_pretrained(model_id, cache_dir=self.cache_dir)
-            # Reuse processor as tokenizer (contains tokenizer functionality)
-            tokenizer = processor
+            # Get the tokenizer from the processor for LLaVA models
+            tokenizer = processor.tokenizer
+            
+            return model, tokenizer, processor
         else:
             raise ValueError(f"Unsupported model: {model_id}")
         
@@ -315,7 +319,7 @@ def run_inference_llama(
     # Format as chat message
     messages = [
         {"role": "user", "content": [
-            {"type": "image"},
+            {"type": "image", "image": image},
             {"type": "text", "text": prompt}
         ]}
     ]
@@ -362,27 +366,39 @@ def run_inference_llava(
         {
             "role": "user",
             "content": [
+                {"type": "image", "image": image},
                 {"type": "text", "text": prompt},
-                {"type": "image"},
             ],
         }
     ]
     
-    # Apply chat template
-    formatted_prompt = processor.apply_chat_template(conversation, add_generation_prompt=True)
+    # Apply chat template with direct tokenization
+    inputs = processor.apply_chat_template(
+        conversation,
+        add_generation_prompt=True,
+        tokenize=True,
+        return_tensors="pt",
+        return_dict=True
+    )
     
-    # Process inputs
-    inputs = processor(
-        images=image, 
-        text=formatted_prompt, 
-        return_tensors="pt"
-    ).to(model.device)
+    # Process image
+    pixel_values = processor.image_processor(image, return_tensors="pt").pixel_values
+    inputs["pixel_values"] = pixel_values
+    
+    # Move to device
+    inputs = {k: v.to(model.device) for k, v in inputs.items()}
     
     # Generate response
     with torch.inference_mode():
         output = model.generate(**inputs, max_new_tokens=max_new_tokens, do_sample=False)
-        # Skip the first 2 tokens for LLaVA models as per the example
-        result = processor.decode(output[0][2:], skip_special_tokens=True)
+        result = processor.batch_decode(output, skip_special_tokens=True)[0]
+        
+        # Extract just the assistant's response
+        if prompt in result:
+            # Find the last instance of the prompt
+            prompt_pos = result.rfind(prompt)
+            if prompt_pos > -1:
+                result = result[prompt_pos + len(prompt):].strip()
     
     return result
 

@@ -8,14 +8,11 @@ import torch
 import numpy as np
 import math
 # Import the ModelManager from inference.py
-from inference import ModelManager, set_models_directory, run_inference, Models
+from inference import model_manager, set_models_directory, run_inference, Models
 
 
 # Default model cache directory
 DEFAULT_CACHE_DIR = "/blue/rcstudents/luke.sutor/adversarial-vlms/models/"
-
-# Create or reuse the model manager
-model_manager = ModelManager(cache_dir=DEFAULT_CACHE_DIR)
 
 
 def get_token_id(tokenizer, string):
@@ -330,8 +327,6 @@ class BasePGDAttack:
                     processed_image = processed_image.detach().requires_grad_(True)
             else:
                 print("Warning: No gradient calculated.")
-
-            import pdb; pdb.set_trace()
             
             print()
 
@@ -476,7 +471,7 @@ class LlamaAttack(BasePGDAttack):
         # Format as chat message
         messages = [
             {"role": "user", "content": [
-                {"type": "image"},
+                {"type": "image", "image": image},
                 {"type": "text", "text": prompt}
             ]}
         ]
@@ -521,6 +516,13 @@ class LlamaAttack(BasePGDAttack):
 class LlavaAttack(BasePGDAttack):
     """PGD attack implementation for LLaVA models."""
     
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # For LLaVA models we need to ensure we have the proper tokenizer reference
+        # Make sure we're using processor.tokenizer for encoding/decoding
+        if not hasattr(self.tokenizer, 'encode'):
+            self.tokenizer = self.processor.tokenizer
+    
     def process_inputs(self, prompt, image):
         """Process inputs for LLaVA models"""
         # Format as conversation
@@ -528,21 +530,27 @@ class LlavaAttack(BasePGDAttack):
             {
                 "role": "user",
                 "content": [
+                    {"type": "image", "image": image},
                     {"type": "text", "text": prompt},
-                    {"type": "image"},
                 ],
             }
         ]
         
-        # Apply chat template
-        formatted_prompt = self.processor.apply_chat_template(conversation, add_generation_prompt=True)
+        # Apply chat template with direct tokenization
+        inputs = self.processor.apply_chat_template(
+            conversation,
+            add_generation_prompt=True,
+            tokenize=True,
+            return_tensors="pt",
+            return_dict=True
+        )
         
-        # Process inputs
-        inputs = self.processor(
-            images=image, 
-            text=formatted_prompt, 
-            return_tensors="pt"
-        ).to(self.model.device)
+        # Process image and add to inputs
+        pixel_values = self.processor.image_processor(image, return_tensors="pt").pixel_values
+        inputs["pixel_values"] = pixel_values
+        
+        # Move to device
+        inputs = {k: v.to(self.model.device) for k, v in inputs.items()}
         
         return inputs
     
@@ -550,9 +558,8 @@ class LlavaAttack(BasePGDAttack):
         """Generate text from processed inputs for LLaVA models"""
         with torch.inference_mode():
             output = self.model.generate(**inputs, max_new_tokens=max_new_tokens, do_sample=False)
-            # Skip the first 2 tokens for LLaVA models as per the example
-            generated_text = self.processor.decode(output[0][2:], skip_special_tokens=True)
-        
+            generated_text = self.processor.batch_decode(output, skip_special_tokens=True)[0]
+            
         return generated_text
     
     def update_working_inputs(self, working_inputs, target_id):
@@ -569,6 +576,167 @@ class LlavaAttack(BasePGDAttack):
                     torch.ones((1, 1), device=working_inputs['attention_mask'].device)], 
                     dim=1
                 )
+    
+    def pgd_attack(self, prompt, image_path, target_sequence):
+        """
+        Override the PGD attack for LLaVA models to handle tokenization differently.
+        """
+        # Process the image and text prompt
+        image = Image.open(image_path).convert("RGB")
+        model_inputs = self.process_inputs(prompt, image)
+        
+        # Set up for gradient tracking
+        if 'pixel_values' not in model_inputs:
+            raise ValueError("LLaVA inputs must contain 'pixel_values'")
+        
+        processed_image = model_inputs['pixel_values'].clone().detach().requires_grad_(True)
+        model_inputs['pixel_values'] = processed_image
+        original_image = processed_image.clone()
+        
+        # Convert target sequence to token IDs using the tokenizer from the processor
+        target_token_ids = self.tokenizer.encode(target_sequence, add_special_tokens=False)
+        print(f"Target tokens: {target_sequence} -> {target_token_ids}")
+        
+        # The rest of the method follows the base implementation
+        # Initialize momentum for more stable gradients
+        momentum = torch.zeros_like(processed_image.data)
+        
+        # Initialize noise standard deviation
+        noise_std = 0.01
+        
+        # Track best result
+        best_image = processed_image.clone()
+        best_prob = 0.0
+        
+        # Print scheduler information
+        print(f"Using {self.scheduler_type} alpha scheduler with warmup ratio {self.warmup_ratio}")
+        print(f"Alpha range: {self.alpha_min:.6f} to {self.alpha_max:.6f}")
+        
+        for i in range(self.num_iter):
+            # Calculate current alpha based on schedule
+            current_alpha = self.get_alpha_for_iteration(i)
+            
+            print(f"=== Iteration {i+1}/{self.num_iter} (alpha={current_alpha:.6f}) ===")
+
+            # Add random noise to improve robustness against quantization
+            with torch.no_grad():
+                noise = torch.randn_like(processed_image) * noise_std
+                noisy_image = processed_image.clone() + noise
+                noisy_image = torch.clamp(noisy_image, 0, 1)
+            
+            # Create new inputs with noisy image
+            noisy_inputs = {k: v.clone() for k, v in model_inputs.items()}
+            noisy_inputs['pixel_values'] = noisy_image.requires_grad_(True)
+            
+            # Accumulate gradients over multiple tokens
+            self.model.zero_grad()
+            total_loss = 0
+            
+            # Create a working copy of inputs that we'll modify for sequential prediction
+            working_inputs = {k: v.clone() for k, v in noisy_inputs.items()}
+            
+            # Number of tokens to optimize (limited by target sequence length)
+            n_tokens = min(self.token_lookahead, len(target_token_ids))
+            
+            # For each token position in the sequence (up to lookahead)
+            for j in range(n_tokens):
+                # Get target token for this position
+                target_id = target_token_ids[j]
+                
+                # Forward pass to get logits
+                outputs = self.model.generate.__wrapped__(self.model, **working_inputs, return_dict_in_generate=True, output_scores=True, output_logits=True)
+                
+                # Get logits for the first predicted position (add 1 for space generated at end of "ASSISTANT:" output)
+                position_logits = outputs['scores'][j+1][0]
+                
+                # Calculate loss for this token
+                log_probs = torch.log_softmax(position_logits, dim=-1)
+                token_loss = -log_probs[target_id]  # Negative log likelihood
+
+                # Position weighting - focus strongly on first token with linear decay for subsequent tokens
+                # First token gets weight=token_lookahead, second gets token_lookahead-1, etc.
+                position_weight = max(float(self.token_lookahead - j), 0.5)  # Ensure minimum weight of 0.5
+                
+                # Add weighted loss to total
+                weighted_loss = token_loss * position_weight
+                total_loss = total_loss + weighted_loss
+                
+                # Print probabilities for monitoring
+                probs = torch.softmax(position_logits, dim=-1)
+                print(f"  Position {j}: Target '{self.tokenizer.decode([target_id])}' prob: {probs[target_id].item():.4f}")
+                top_token_id = torch.argmax(position_logits).item()
+                print(f"    Top predicted: '{self.tokenizer.decode([top_token_id])}' prob: {probs[top_token_id].item():.4f}")
+                
+                # For next token prediction, append this token to input
+                # Skip this step for the last token we're optimizing
+                if j < n_tokens - 1:
+                    # Update working inputs for next token prediction
+                    self.update_working_inputs(working_inputs, target_id)
+            
+            # Backpropagate the total loss
+            total_loss.backward()
+            
+            # Track first token probability for best result
+            first_token_prob = probs[target_token_ids[0]].item()
+            if first_token_prob > best_prob:
+                best_prob = first_token_prob
+                best_image = processed_image.clone()
+
+            # PGD update with momentum
+            if noisy_inputs['pixel_values'].grad is not None:
+                # Update momentum term (helps stabilize optimization)
+                momentum = 0.9 * momentum - current_alpha * torch.sign(noisy_inputs['pixel_values'].grad)
+                
+                # Apply momentum update
+                processed_image = processed_image + momentum
+                # Print the shape and some values of the processed image
+                print(f"Processed image shape: {processed_image.shape}")
+                print(f"Processed image values (sample): {processed_image.flatten()[:10].tolist()}")
+                
+                # Project back to epsilon ball
+                perturbation = torch.clamp(processed_image - original_image, -self.epsilon, self.epsilon)
+                processed_image = original_image + perturbation
+                
+                # Quantize directly to valid 8-bit values (multiples of 1/255)
+                with torch.no_grad():
+                    # Round to nearest 8-bit pixel values
+                    processed_image = torch.round(processed_image * 255) / 255
+                    
+                    # Ensure values stay in valid range after rounding
+                    processed_image = torch.clamp(processed_image, 0, 1)
+                    
+                    # Since we're using discrete pixel values, small noise is still useful
+                    # but we can use a smaller fixed value
+                    noise_std = 0.003
+                    
+                    # Update model inputs with properly quantized image
+                    model_inputs['pixel_values'] = processed_image.clone()
+                    
+                    # Prepare for next iteration
+                    processed_image = processed_image.detach().requires_grad_(True)
+            else:
+                print("Warning: No gradient calculated.")
+            
+            print()
+
+        # Check if the original image is equal to the processed image
+        is_equal = torch.equal(original_image, processed_image)
+        print(f"Original image is equal to processed image: {is_equal}")
+        
+        # Use the best image found during optimization
+        if best_prob > 0.0:
+            print(f"\nUsing best image with probability {best_prob:.4f}")
+            processed_image = best_image
+
+        import pdb; pdb.set_trace()
+            
+        # Process the final perturbed image
+        perturbed_image = processed_image.squeeze(0).permute(1, 2, 0).cpu().detach().numpy()
+        
+        # Final image with simulated quantization (important for robustness)
+        perturbed_image = np.clip(perturbed_image * 255, 0, 255).round() / 255
+        
+        return perturbed_image
 
 
 def pgd_attack(model_id, prompt, image_path, target_sequence, 
@@ -630,11 +798,7 @@ if __name__ == "__main__":
     load_dotenv()
     login(os.environ['HF_KEY'])
 
-    # Uncomment the model you want to use
-    # model_id = Models.QWEN2_VL_2B
-    # model_id = Models.PALIGEMMA2_10B
-    # model_id = Models.LLAMA_3_2_11B_VISION
-    model_id = Models.LLAVA_1_5_7B  # Try the new LLaVA model
+    model_id = Models.PALIGEMMA2_3B
 
     # Get the local path to the images
     script_path = "/".join(__file__.split("/")[:-1])
@@ -659,7 +823,7 @@ if __name__ == "__main__":
             epsilon=0.1, 
             alpha_max=0.01,  # Maximum step size 
             alpha_min=0.0001,  # Minimum step size
-            num_iter=500,
+            num_iter=200,
             warmup_ratio=0.1,  # 10% of iterations for warmup
             scheduler_type="cosine"  # Options: linear, cosine, polynomial
         )
