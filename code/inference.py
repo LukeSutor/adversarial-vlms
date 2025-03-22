@@ -1,4 +1,4 @@
-from transformers import AutoProcessor, AutoTokenizer, PaliGemmaForConditionalGeneration, Qwen2VLForConditionalGeneration, PaliGemmaProcessor, Qwen2_5_VLForConditionalGeneration
+from transformers import AutoProcessor, AutoTokenizer, PaliGemmaForConditionalGeneration, Qwen2VLForConditionalGeneration, PaliGemmaProcessor, Qwen2_5_VLForConditionalGeneration, MllamaForConditionalGeneration, LlavaForConditionalGeneration
 from qwen_vl_utils import process_vision_info
 from PIL import Image
 import torch
@@ -113,6 +113,31 @@ class ModelManager:
             
             tokenizer = AutoTokenizer.from_pretrained(model_id, cache_dir=self.cache_dir)
             processor = AutoProcessor.from_pretrained(model_id, cache_dir=self.cache_dir)
+        elif "llama-3.2" in model_id.lower() and "vision" in model_id.lower():
+            # Special handling for Llama 3.2 Vision models
+            model = MllamaForConditionalGeneration.from_pretrained(
+                model_id,
+                torch_dtype=self.dtype,
+                device_map=self.device,
+                cache_dir=self.cache_dir
+            ).eval()
+            
+            # Llama models use AutoProcessor and don't need a separate tokenizer
+            processor = AutoProcessor.from_pretrained(model_id, cache_dir=self.cache_dir)
+            # Reuse processor as tokenizer - it contains the tokenizer functionality
+            tokenizer = processor
+        elif "llava" in model_id.lower():
+            # Special handling for LLaVA models
+            model = LlavaForConditionalGeneration.from_pretrained(
+                model_id,
+                torch_dtype=self.dtype,
+                device_map=self.device,
+                cache_dir=self.cache_dir
+            ).eval()
+            
+            processor = AutoProcessor.from_pretrained(model_id, cache_dir=self.cache_dir)
+            # Reuse processor as tokenizer (contains tokenizer functionality)
+            tokenizer = processor
         else:
             raise ValueError(f"Unsupported model: {model_id}")
         
@@ -275,6 +300,92 @@ def run_inference_qwen25_vl(
     return output_text[0] if output_text else ""
 
 
+def run_inference_llama(
+    model_id: str,
+    prompt: str,
+    image_path: str,
+    max_new_tokens: int = 100
+) -> str:
+    """Run inference with a Llama-3.2-Vision model."""
+    model, tokenizer, processor = model_manager.get_model(model_id)
+    
+    # Load image
+    image = Image.open(image_path).convert("RGB")
+    
+    # Format as chat message
+    messages = [
+        {"role": "user", "content": [
+            {"type": "image"},
+            {"type": "text", "text": prompt}
+        ]}
+    ]
+    
+    # Process inputs
+    input_text = processor.apply_chat_template(messages, add_generation_prompt=True)
+    inputs = processor(
+        image,
+        input_text,
+        add_special_tokens=False,
+        return_tensors="pt"
+    ).to(model.device)
+    
+    # Generate response
+    with torch.inference_mode():
+        output_ids = model.generate(**inputs, max_new_tokens=max_new_tokens)
+        # Decode the whole sequence as Llama doesn't need to trim input tokens
+        result = processor.decode(output_ids[0], skip_special_tokens=True)
+        
+        # Remove the input prompt from the result
+        # This is a bit more complex for Llama, we'll look for the last occurrence of the prompt
+        if prompt in result:
+            # Find the last instance of the prompt (after any system messages)
+            prompt_pos = result.rfind(prompt)
+            if prompt_pos > -1:
+                result = result[prompt_pos + len(prompt):].strip()
+    
+    return result
+
+def run_inference_llava(
+    model_id: str,
+    prompt: str,
+    image_path: str,
+    max_new_tokens: int = 100
+) -> str:
+    """Run inference with a LLaVA model."""
+    model, tokenizer, processor = model_manager.get_model(model_id)
+    
+    # Load image
+    image = Image.open(image_path).convert("RGB")
+    
+    # Format as conversation
+    conversation = [
+        {
+            "role": "user",
+            "content": [
+                {"type": "text", "text": prompt},
+                {"type": "image"},
+            ],
+        }
+    ]
+    
+    # Apply chat template
+    formatted_prompt = processor.apply_chat_template(conversation, add_generation_prompt=True)
+    
+    # Process inputs
+    inputs = processor(
+        images=image, 
+        text=formatted_prompt, 
+        return_tensors="pt"
+    ).to(model.device)
+    
+    # Generate response
+    with torch.inference_mode():
+        output = model.generate(**inputs, max_new_tokens=max_new_tokens, do_sample=False)
+        # Skip the first 2 tokens for LLaVA models as per the example
+        result = processor.decode(output[0][2:], skip_special_tokens=True)
+    
+    return result
+
 def get_inference_function(model_id: str):
     """Return the appropriate inference function for the given model ID."""
     if "paligemma" in model_id.lower():
@@ -283,6 +394,10 @@ def get_inference_function(model_id: str):
         return run_inference_qwen25_vl
     elif "qwen2-vl" in model_id.lower():
         return run_inference_qwen2_vl
+    elif "llama-3.2" in model_id.lower() and "vision" in model_id.lower():
+        return run_inference_llama
+    elif "llava" in model_id.lower():
+        return run_inference_llava
     else:
         raise ValueError(f"No inference function available for model: {model_id}")
 
@@ -319,6 +434,9 @@ class Models:
     QWEN25_VL_3B = "Qwen/Qwen2.5-VL-3B-Instruct"
     QWEN25_VL_7B = "Qwen/Qwen2.5-VL-7B-Instruct"
     QWEN25_VL_72B = "Qwen/Qwen2.5-VL-72B-Instruct"
+    LLAMA_3_2_11B_VISION = "meta-llama/Llama-3.2-11B-Vision-Instruct"
+    LLAVA_1_5_7B = "llava-hf/llava-1.5-7b-hf"
+    LLAVA_1_5_13B = "llava-hf/llava-1.5-13b-hf"
     # More models can be added here as constants
 
 

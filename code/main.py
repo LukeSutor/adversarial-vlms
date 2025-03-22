@@ -1,4 +1,4 @@
-from transformers import AutoProcessor, AutoTokenizer, PaliGemmaForConditionalGeneration, Qwen2VLForConditionalGeneration, PaliGemmaProcessor, Qwen2_5_VLForConditionalGeneration
+from transformers import AutoProcessor, AutoTokenizer, PaliGemmaForConditionalGeneration, Qwen2VLForConditionalGeneration, PaliGemmaProcessor, Qwen2_5_VLForConditionalGeneration, MllamaForConditionalGeneration, LlavaForConditionalGeneration
 from qwen_vl_utils import process_vision_info
 from PIL import Image
 import os
@@ -74,6 +74,10 @@ class AttackRegistry:
             return cls._registry.get("qwen25", cls._registry.get("qwen", cls._registry.get("default")))
         elif "qwen2-vl" in model_id.lower():
             return cls._registry.get("qwen", cls._registry.get("default"))
+        elif "llama-3.2" in model_id.lower() and "vision" in model_id.lower():
+            return cls._registry.get("llama", cls._registry.get("default"))
+        elif "llava" in model_id.lower():
+            return cls._registry.get("llava", cls._registry.get("default"))
         
         # Fall back to default
         return cls._registry.get("default")
@@ -463,6 +467,109 @@ class Qwen25Attack(QwenAttack):
     # Inherits all functionality from QwenAttack since the interfaces are compatible
     pass
 
+@AttackRegistry.register("llama")
+class LlamaAttack(BasePGDAttack):
+    """PGD attack implementation for Llama 3.2 Vision models."""
+    
+    def process_inputs(self, prompt, image):
+        """Process inputs for Llama Vision models"""
+        # Format as chat message
+        messages = [
+            {"role": "user", "content": [
+                {"type": "image"},
+                {"type": "text", "text": prompt}
+            ]}
+        ]
+        
+        # Process inputs
+        input_text = self.processor.apply_chat_template(messages, add_generation_prompt=True)
+        inputs = self.processor(
+            image,
+            input_text,
+            add_special_tokens=False,
+            return_tensors="pt"
+        ).to(self.model.device)
+        
+        return inputs
+    
+    def generate_from_inputs(self, inputs, max_new_tokens=10):
+        """Generate text from processed inputs for Llama models"""
+        with torch.inference_mode():
+            output_ids = self.model.generate(**inputs, max_new_tokens=max_new_tokens)
+            generated_text = self.processor.decode(output_ids[0], skip_special_tokens=True)
+            
+            # For attack verification, we don't need to remove the prompt part
+            return generated_text
+    
+    def update_working_inputs(self, working_inputs, target_id):
+        """Update inputs for next token prediction for Llama models"""
+        # Add the target token to the input sequence
+        if 'input_ids' in working_inputs:
+            new_token_tensor = torch.tensor([[target_id]], device=working_inputs['input_ids'].device)
+            working_inputs['input_ids'] = torch.cat([working_inputs['input_ids'], new_token_tensor], dim=1)
+            
+            # Also update attention mask if present
+            if 'attention_mask' in working_inputs:
+                working_inputs['attention_mask'] = torch.cat(
+                    [working_inputs['attention_mask'], 
+                    torch.ones((1, 1), device=working_inputs['attention_mask'].device)], 
+                    dim=1
+                )
+
+
+@AttackRegistry.register("llava")
+class LlavaAttack(BasePGDAttack):
+    """PGD attack implementation for LLaVA models."""
+    
+    def process_inputs(self, prompt, image):
+        """Process inputs for LLaVA models"""
+        # Format as conversation
+        conversation = [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": prompt},
+                    {"type": "image"},
+                ],
+            }
+        ]
+        
+        # Apply chat template
+        formatted_prompt = self.processor.apply_chat_template(conversation, add_generation_prompt=True)
+        
+        # Process inputs
+        inputs = self.processor(
+            images=image, 
+            text=formatted_prompt, 
+            return_tensors="pt"
+        ).to(self.model.device)
+        
+        return inputs
+    
+    def generate_from_inputs(self, inputs, max_new_tokens=10):
+        """Generate text from processed inputs for LLaVA models"""
+        with torch.inference_mode():
+            output = self.model.generate(**inputs, max_new_tokens=max_new_tokens, do_sample=False)
+            # Skip the first 2 tokens for LLaVA models as per the example
+            generated_text = self.processor.decode(output[0][2:], skip_special_tokens=True)
+        
+        return generated_text
+    
+    def update_working_inputs(self, working_inputs, target_id):
+        """Update inputs for next token prediction for LLaVA models"""
+        # Add the target token to the input sequence
+        if 'input_ids' in working_inputs:
+            new_token_tensor = torch.tensor([[target_id]], device=working_inputs['input_ids'].device)
+            working_inputs['input_ids'] = torch.cat([working_inputs['input_ids'], new_token_tensor], dim=1)
+            
+            # Also update attention mask if present
+            if 'attention_mask' in working_inputs:
+                working_inputs['attention_mask'] = torch.cat(
+                    [working_inputs['attention_mask'], 
+                    torch.ones((1, 1), device=working_inputs['attention_mask'].device)], 
+                    dim=1
+                )
+
 
 def pgd_attack(model_id, prompt, image_path, target_sequence, 
                epsilon=0.02, alpha_max=0.01, alpha_min=0.0001, num_iter=10, 
@@ -523,7 +630,11 @@ if __name__ == "__main__":
     load_dotenv()
     login(os.environ['HF_KEY'])
 
-    model_id = Models.QWEN2_VL_2B
+    # Uncomment the model you want to use
+    # model_id = Models.QWEN2_VL_2B
+    # model_id = Models.PALIGEMMA2_10B
+    # model_id = Models.LLAMA_3_2_11B_VISION
+    model_id = Models.LLAVA_1_5_7B  # Try the new LLaVA model
 
     # Get the local path to the images
     script_path = "/".join(__file__.split("/")[:-1])
