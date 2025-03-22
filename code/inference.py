@@ -260,15 +260,23 @@ class Models:
 
 if __name__ == "__main__":
     # Define the model ID and input parameters
-    model_id = Models.PALIGEMMA2_10B
+    models = [Models.PALIGEMMA2_3B]
     prompt = "Answer the question"
-    image_path = "attack_image.png"
     max_new_tokens = 100
 
+    # Get the local path to the images
+    script_path = "/".join(__file__.split("/")[:-1])
+    image_dir = os.path.join(script_path, "../images")
+    attack_dir = os.path.join(image_dir, "attack")
+    clean_dir = os.path.join(image_dir, "clean")
+
+    image_path = os.path.join(attack_dir, "math.png")
+
     # Run inference
-    try:
-        result = run_inference(model_id, prompt, image_path, max_new_tokens)
-        print("Generated Response:")
-        print(result)
-    except Exception as e:
-        print(f"An error occurred during inference: {e}")
+    for model in models:
+        try:
+            result = run_inference(model, prompt, image_path, max_new_tokens)
+            print("Generated Response:")
+            print(result)
+        except Exception as e:
+            print(f"An error occurred during inference: {e}")
