@@ -2,13 +2,13 @@ from transformers import AutoProcessor, AutoTokenizer, PaliGemmaForConditionalGe
 from qwen_vl_utils import process_vision_info
 from PIL import Image
 import os
-from dotenv import load_dotenv
-from huggingface_hub import login
 import torch
 import numpy as np
 import math
 # Import the ModelManager from inference.py
 from inference import model_manager, set_models_directory, run_inference, Models
+# Import utility functions from utils.py
+from utils import save_image_tensor, load_image_tensor, convert_tensor_to_pil, convert_pil_to_tensor, save_image
 
 
 # Default model cache directory
@@ -195,6 +195,11 @@ class BasePGDAttack:
             prompt: Text prompt to use with the image
             image_path: Path to the input image
             target_sequence: Target text sequence to generate
+        
+        Returns:
+            Tuple of (numpy_image, tensor_image) where:
+            - numpy_image: numpy array of shape [H, W, C] in range [0, 1]
+            - tensor_image: PyTorch tensor of shape [1, C, H, W]
         """
         # Process the image and text prompt
         image = Image.open(image_path).convert("RGB")
@@ -311,7 +316,7 @@ class BasePGDAttack:
                 # Quantize directly to valid 8-bit values (multiples of 1/255)
                 with torch.no_grad():
                     # Round to nearest 8-bit pixel values
-                    processed_image = torch.round(processed_image * 255) / 255
+                    # processed_image = torch.round(processed_image * 255) / 255
                     
                     # Ensure values stay in valid range after rounding
                     processed_image = torch.clamp(processed_image, 0, 1)
@@ -335,21 +340,17 @@ class BasePGDAttack:
             print(f"\nUsing best image with probability {best_prob:.4f}")
             processed_image = best_image
 
-        # Process the final perturbed image
+        # Save the tensor version before any transformations
+        tensor_image = processed_image.clone()
+        
+        # Process the final perturbed image for numpy output
         perturbed_image = processed_image.squeeze(0).permute(1, 2, 0).cpu().detach().numpy()
-
+        
         # Final image with simulated quantization (important for robustness)
         perturbed_image = np.clip(perturbed_image * 255, 0, 255).round() / 255
-
-        # Verify before saving (using processed image)
-        print("\nVerifying attack BEFORE saving image...")
-        with torch.no_grad():
-            verify_inputs = {k: v.clone() for k, v in model_inputs.items()}
-            verify_inputs['pixel_values'] = processed_image.clone()
-            direct_result = self.generate_from_inputs(verify_inputs)
-            print(f"Direct model output (before save): {direct_result}")
         
-        return perturbed_image
+        # Return both formats
+        return perturbed_image, tensor_image
 
 
 # ==============================================
@@ -727,16 +728,18 @@ class LlavaAttack(BasePGDAttack):
         if best_prob > 0.0:
             print(f"\nUsing best image with probability {best_prob:.4f}")
             processed_image = best_image
-
-        import pdb; pdb.set_trace()
             
-        # Process the final perturbed image
+        # Return both the processed tensor and a numpy version
+        # The tensor retains the exact values without quantization
+        tensor_image = processed_image.clone()
+        
+        # Process for numpy output
         perturbed_image = processed_image.squeeze(0).permute(1, 2, 0).cpu().detach().numpy()
         
         # Final image with simulated quantization (important for robustness)
         perturbed_image = np.clip(perturbed_image * 255, 0, 255).round() / 255
         
-        return perturbed_image
+        return perturbed_image, tensor_image
 
 
 def pgd_attack(model_id, prompt, image_path, target_sequence, 
@@ -760,7 +763,7 @@ def pgd_attack(model_id, prompt, image_path, target_sequence,
         scheduler_type: Type of scheduler to use (linear, cosine, polynomial)
         
     Returns:
-        Perturbed image as a numpy array
+        Tuple of (numpy_image, tensor_image) containing the perturbed image in both formats
     """
     # Get the appropriate attack class for this model
     attack_class = AttackRegistry.get_attack_function(model_id)
@@ -779,64 +782,3 @@ def pgd_attack(model_id, prompt, image_path, target_sequence,
     
     # Run the attack
     return attack.pgd_attack(prompt, image_path, target_sequence)
-
-
-def save_image(perturbed_image, output_path="perturbed_image.png"):
-    """Save perturbed image with special handling for robustness."""
-    # Convert the perturbed image to 8-bit format
-    perturbed_image = (perturbed_image * 255).astype(np.uint8)
-    
-    # Create PIL image from array
-    image = Image.fromarray(perturbed_image)
-    
-    # Save with no compression to preserve details
-    image.save(output_path, format='PNG', compress_level=0, optimize=False)
-    print(f"Saved attack image to {output_path}")
-
-
-if __name__ == "__main__":
-    load_dotenv()
-    login(os.environ['HF_KEY'])
-
-    model_id = Models.PALIGEMMA2_3B
-
-    # Get the local path to the images
-    script_path = "/".join(__file__.split("/")[:-1])
-    image_dir = os.path.join(script_path, "../images")
-    attack_dir = os.path.join(image_dir, "attack")
-    clean_dir = os.path.join(image_dir, "clean")
-
-    prompt = "Answer the question."
-    target_sequence = "hello"
-    input_image_path = os.path.join(clean_dir, "math_question.png")
-    attack_image_file = os.path.join(clean_dir, "math.png")
-
-    attack = True
-
-    if attack:
-        print(f"Performing attack on model: {model_id}...")
-        image = pgd_attack(
-            model_id=model_id, 
-            prompt=prompt, 
-            image_path=input_image_path, 
-            target_sequence=target_sequence, 
-            epsilon=0.1, 
-            alpha_max=0.01,  # Maximum step size 
-            alpha_min=0.0001,  # Minimum step size
-            num_iter=200,
-            warmup_ratio=0.1,  # 10% of iterations for warmup
-            scheduler_type="cosine"  # Options: linear, cosine, polynomial
-        )
-        save_image(image, attack_image_file)
-
-    try:
-        attack_image = Image.open(attack_image_file).convert("RGB")
-        has_attack_image = True
-    except:
-        print(f"Attack image not found: {attack_image_file}")
-        has_attack_image = False
-
-    # Evaluate original and attack image results
-    print("\nOriginal answer:", get_generation(model_id, prompt, input_image_path))
-    if has_attack_image:
-        print("\nAttack answer:", get_generation(model_id, prompt, attack_image_file))

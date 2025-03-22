@@ -59,6 +59,10 @@ def main():
         if os.path.exists(tensor_path):
             loaded_tensor = load_image_tensor(tensor_path)
             print(f"Successfully loaded tensor with shape: {loaded_tensor.shape}")
+            # Evaluate the results based on the tensor as well as the PIL image
+            print("\nEvaluating results based on the tensor:")
+            tensor_result = get_generation(model_id, prompt, tensor_image)
+            print("Tensor-based answer:", tensor_result)
 
     # Evaluate the original and attack image results
     try:
