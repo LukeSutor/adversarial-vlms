@@ -1,4 +1,4 @@
-from transformers import AutoProcessor, AutoTokenizer, PaliGemmaForConditionalGeneration, Qwen2VLForConditionalGeneration, PaliGemmaProcessor
+from transformers import AutoProcessor, AutoTokenizer, PaliGemmaForConditionalGeneration, Qwen2VLForConditionalGeneration, PaliGemmaProcessor, Qwen2_5_VLForConditionalGeneration
 from qwen_vl_utils import process_vision_info
 from PIL import Image
 import os
@@ -6,6 +6,7 @@ from dotenv import load_dotenv
 from huggingface_hub import login
 import torch
 import numpy as np
+import math
 # Import the ModelManager from inference.py
 from inference import ModelManager, set_models_directory, run_inference, Models
 
@@ -69,11 +70,72 @@ class AttackRegistry:
         # Check for model family match
         if "paligemma" in model_id.lower():
             return cls._registry.get("paligemma", cls._registry.get("default"))
+        elif "qwen2.5-vl" in model_id.lower():
+            return cls._registry.get("qwen25", cls._registry.get("qwen", cls._registry.get("default")))
         elif "qwen2-vl" in model_id.lower():
             return cls._registry.get("qwen", cls._registry.get("default"))
         
         # Fall back to default
         return cls._registry.get("default")
+
+
+# ==============================================
+# Alpha Scheduler Implementation
+# ==============================================
+
+class AlphaScheduler:
+    """Implements different scheduling strategies for alpha parameter in PGD attacks."""
+    
+    @staticmethod
+    def get_scheduler(scheduler_type="cosine"):
+        """Factory method to get the appropriate scheduler function"""
+        schedulers = {
+            "linear": AlphaScheduler.linear_schedule,
+            "cosine": AlphaScheduler.cosine_schedule,
+            "polynomial": AlphaScheduler.polynomial_schedule,
+        }
+        return schedulers.get(scheduler_type, AlphaScheduler.cosine_schedule)
+    
+    @staticmethod
+    def linear_schedule(iteration, num_iterations, warmup_ratio, alpha_max, alpha_min=0.0):
+        """Linear warmup and linear decay schedule"""
+        warmup_steps = int(num_iterations * warmup_ratio)
+        
+        if iteration < warmup_steps:
+            # Linear warmup
+            return alpha_min + (alpha_max - alpha_min) * (iteration / max(1, warmup_steps))
+        else:
+            # Linear decay
+            decay_ratio = max(0.0, (num_iterations - iteration) / max(1, (num_iterations - warmup_steps)))
+            return alpha_min + (alpha_max - alpha_min) * decay_ratio
+    
+    @staticmethod
+    def cosine_schedule(iteration, num_iterations, warmup_ratio, alpha_max, alpha_min=0.0):
+        """Linear warmup and cosine decay schedule"""
+        warmup_steps = int(num_iterations * warmup_ratio)
+        
+        if iteration < warmup_steps:
+            # Linear warmup
+            return alpha_min + (alpha_max - alpha_min) * (iteration / max(1, warmup_steps))
+        else:
+            # Cosine decay
+            decay_steps = num_iterations - warmup_steps
+            cosine_decay = 0.5 * (1 + math.cos(math.pi * (iteration - warmup_steps) / max(1, decay_steps)))
+            return alpha_min + (alpha_max - alpha_min) * cosine_decay
+    
+    @staticmethod
+    def polynomial_schedule(iteration, num_iterations, warmup_ratio, alpha_max, alpha_min=0.0, power=2.0):
+        """Linear warmup and polynomial decay schedule"""
+        warmup_steps = int(num_iterations * warmup_ratio)
+        
+        if iteration < warmup_steps:
+            # Linear warmup
+            return alpha_min + (alpha_max - alpha_min) * (iteration / max(1, warmup_steps))
+        else:
+            # Polynomial decay
+            decay_steps = num_iterations - warmup_steps
+            decay_ratio = (1 - (iteration - warmup_steps) / max(1, decay_steps)) ** power
+            return alpha_min + (alpha_max - alpha_min) * decay_ratio
 
 
 # ==============================================
@@ -83,15 +145,33 @@ class AttackRegistry:
 class BasePGDAttack:
     """Base class for PGD attack implementations."""
     
-    def __init__(self, model_id, epsilon=0.02, alpha=0.01, num_iter=10, token_lookahead=3):
+    def __init__(self, model_id, epsilon=0.02, alpha_max=0.01, alpha_min=0.0001, 
+                 num_iter=10, token_lookahead=3, warmup_ratio=0.1, 
+                 scheduler_type="cosine"):
         self.model_id = model_id
         self.epsilon = epsilon
-        self.alpha = alpha
+        self.alpha_max = alpha_max
+        self.alpha_min = alpha_min
         self.num_iter = num_iter
         self.token_lookahead = token_lookahead
+        self.warmup_ratio = warmup_ratio
+        self.scheduler_type = scheduler_type
+        
+        # Get the alpha scheduler function
+        self.alpha_scheduler = AlphaScheduler.get_scheduler(scheduler_type)
         
         # Load model, tokenizer, and processor via model manager
         self.model, self.tokenizer, self.processor = model_manager.get_model(model_id)
+    
+    def get_alpha_for_iteration(self, iteration):
+        """Calculate alpha value for the current iteration based on schedule"""
+        return self.alpha_scheduler(
+            iteration=iteration,
+            num_iterations=self.num_iter,
+            warmup_ratio=self.warmup_ratio,
+            alpha_max=self.alpha_max,
+            alpha_min=self.alpha_min
+        )
     
     def process_inputs(self, prompt, image):
         """Process inputs based on model type - to be implemented by subclasses"""
@@ -138,8 +218,15 @@ class BasePGDAttack:
         best_image = processed_image.clone()
         best_prob = 0.0
         
+        # Print scheduler information
+        print(f"Using {self.scheduler_type} alpha scheduler with warmup ratio {self.warmup_ratio}")
+        print(f"Alpha range: {self.alpha_min:.6f} to {self.alpha_max:.6f}")
+        
         for i in range(self.num_iter):
-            print(f"=== Iteration {i+1}/{self.num_iter} ===")
+            # Calculate current alpha based on schedule
+            current_alpha = self.get_alpha_for_iteration(i)
+            
+            print(f"=== Iteration {i+1}/{self.num_iter} (alpha={current_alpha:.6f}) ===")
 
             # Add random noise to improve robustness against quantization
             with torch.no_grad():
@@ -208,10 +295,13 @@ class BasePGDAttack:
             # PGD update with momentum
             if noisy_inputs['pixel_values'].grad is not None:
                 # Update momentum term (helps stabilize optimization)
-                momentum = 0.9 * momentum - self.alpha * torch.sign(noisy_inputs['pixel_values'].grad)
+                momentum = 0.9 * momentum - current_alpha * torch.sign(noisy_inputs['pixel_values'].grad)
                 
                 # Apply momentum update
                 processed_image = processed_image + momentum
+                # Print the shape and some values of the processed image
+                print(f"Processed image shape: {processed_image.shape}")
+                print(f"Processed image values (sample): {processed_image.flatten()[:10].tolist()}")
                 
                 # Project back to epsilon ball
                 perturbation = torch.clamp(processed_image - original_image, -self.epsilon, self.epsilon)
@@ -234,10 +324,10 @@ class BasePGDAttack:
                     
                     # Prepare for next iteration
                     processed_image = processed_image.detach().requires_grad_(True)
-                    
-                print(f"  Using quantized pixel values (1/255 steps) with noise std: {noise_std:.5f}")
             else:
                 print("Warning: No gradient calculated.")
+
+            import pdb; pdb.set_trace()
             
             print()
 
@@ -366,9 +456,17 @@ class DefaultAttack(PaliGemmaAttack):
     """Default PGD attack implementation for most models."""
     pass
 
+# Register the Qwen2.5 attack class (uses same implementation as Qwen since they have the same interface)
+@AttackRegistry.register("qwen25")
+class Qwen25Attack(QwenAttack):
+    """PGD attack implementation for Qwen 2.5 VL models."""
+    # Inherits all functionality from QwenAttack since the interfaces are compatible
+    pass
+
 
 def pgd_attack(model_id, prompt, image_path, target_sequence, 
-               epsilon=0.02, alpha=0.01, num_iter=10, token_lookahead=3):
+               epsilon=0.02, alpha_max=0.01, alpha_min=0.0001, num_iter=10, 
+               token_lookahead=3, warmup_ratio=0.1, scheduler_type="cosine"):
     """
     Factory function that creates and executes the appropriate PGD attack
     based on the model type.
@@ -379,9 +477,12 @@ def pgd_attack(model_id, prompt, image_path, target_sequence,
         image_path: Path to the input image
         target_sequence: Target text sequence to generate
         epsilon: Maximum perturbation magnitude (L-infinity norm)
-        alpha: Step size for PGD
+        alpha_max: Maximum step size for PGD
+        alpha_min: Minimum step size for PGD
         num_iter: Number of PGD iterations
         token_lookahead: Number of tokens ahead to optimize for
+        warmup_ratio: Proportion of iterations to use for warming up alpha
+        scheduler_type: Type of scheduler to use (linear, cosine, polynomial)
         
     Returns:
         Perturbed image as a numpy array
@@ -393,9 +494,12 @@ def pgd_attack(model_id, prompt, image_path, target_sequence,
     attack = attack_class(
         model_id=model_id,
         epsilon=epsilon,
-        alpha=alpha,
+        alpha_max=alpha_max,
+        alpha_min=alpha_min,
         num_iter=num_iter,
-        token_lookahead=token_lookahead
+        token_lookahead=token_lookahead,
+        warmup_ratio=warmup_ratio,
+        scheduler_type=scheduler_type
     )
     
     # Run the attack
@@ -418,13 +522,8 @@ def save_image(perturbed_image, output_path="perturbed_image.png"):
 if __name__ == "__main__":
     load_dotenv()
     login(os.environ['HF_KEY'])
-    # Available models:
-    # model_id = Models.QWEN2_VL_2B
-    # model_id = Models.PALIGEMMA_3B
-    # model_id = Models.PALIGEMMA2_3B
-    model_id = Models.PALIGEMMA2_10B
-    # model_id = Models.PALIGEMMA2_28B
-    # model_id = Models.PALIGEMMA2_3B
+
+    model_id = Models.QWEN2_VL_2B
 
     # Get the local path to the images
     script_path = "/".join(__file__.split("/")[:-1])
@@ -447,8 +546,11 @@ if __name__ == "__main__":
             image_path=input_image_path, 
             target_sequence=target_sequence, 
             epsilon=0.1, 
-            alpha=0.01, 
-            num_iter=500
+            alpha_max=0.01,  # Maximum step size 
+            alpha_min=0.0001,  # Minimum step size
+            num_iter=500,
+            warmup_ratio=0.1,  # 10% of iterations for warmup
+            scheduler_type="cosine"  # Options: linear, cosine, polynomial
         )
         save_image(image, attack_image_file)
 
