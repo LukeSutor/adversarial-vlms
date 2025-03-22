@@ -3,19 +3,23 @@ from dotenv import load_dotenv
 import torch
 from PIL import Image
 from huggingface_hub import login
+import sys
+# Append the current file directory to the system path
+current_dir = os.path.dirname(os.path.abspath(__file__))
+sys.path.append(current_dir)
 
 # Import local modules
 from inference import model_manager, set_models_directory, run_inference, Models
 from attacks import pgd_attack, get_token_id, get_generation
-from utils import save_image, load_image_tensor
+from utils import load_image_tensor, convert_tensor_to_pil, save_attack_results, resize_images_with_padding
 
-def main():
+def attack():
     # Setup environment and authentication
     load_dotenv()
     login(os.environ['HF_KEY'])
 
     # Select model to use
-    model_id = Models.PALIGEMMA2_3B
+    model_id = Models.PALIGEMMA2_10B
 
     # Get the local path to the images
     script_path = "/".join(__file__.split("/")[:-1])
@@ -26,19 +30,21 @@ def main():
     # Create directories if they don't exist
     os.makedirs(attack_dir, exist_ok=True)
     os.makedirs(clean_dir, exist_ok=True)
-
+    
     # Define the attack parameters
     prompt = "Answer the question."
     target_sequence = "hello"
     input_image_path = os.path.join(clean_dir, "math_question.png")
-    attack_image_file = os.path.join(clean_dir, "math.png")
+    
+    # Save attacked images to attack directory
+    attack_image_base = os.path.join(attack_dir, "math")
 
     # Determine whether to run a new attack or use existing results
     attack = True
 
     if attack:
         print(f"Performing attack on model: {model_id}...")
-        perturbed_image, tensor_image = pgd_attack(
+        tensor_image = pgd_attack(
             model_id=model_id, 
             prompt=prompt, 
             image_path=input_image_path, 
@@ -47,36 +53,56 @@ def main():
             alpha_max=0.01,  # Maximum step size 
             alpha_min=0.0001,  # Minimum step size
             num_iter=200,
-            warmup_ratio=0.1,  # 10% of iterations for warmup
+            warmup_ratio=0.2,  # 20% of iterations for warmup
             scheduler_type="cosine"  # Options: linear, cosine, polynomial
         )
         
-        # Save both PNG and tensor versions
-        save_image(perturbed_image, attack_image_file, save_tensor=True)
+        # Save both tensor and PNG versions using the utility function
+        tensor_path, png_path = save_attack_results(tensor_image, attack_image_base)
         
-        # Example of loading the saved tensor
-        tensor_path = os.path.splitext(attack_image_file)[0] + '.pt'
-        if os.path.exists(tensor_path):
-            loaded_tensor = load_image_tensor(tensor_path)
-            print(f"Successfully loaded tensor with shape: {loaded_tensor.shape}")
-            # Evaluate the results based on the tensor as well as the PIL image
-            print("\nEvaluating results based on the tensor:")
-            tensor_result = get_generation(model_id, prompt, tensor_image)
-            print("Tensor-based answer:", tensor_result)
+        # Optional: Run inference directly with the tensor we just created
+        print("\nImmediate evaluation with tensor:")
+        tensor_result = run_inference(model_id, prompt, tensor_image)
+        print("Tensor-based answer:", tensor_result)
 
-    # Evaluate the original and attack image results
-    try:
-        attack_image = Image.open(attack_image_file).convert("RGB")
-        has_attack_image = True
-    except:
-        print(f"Attack image not found: {attack_image_file}")
-        has_attack_image = False
-
-    # Evaluate original and attack image results
+    # Evaluate the original image
     print("\nOriginal answer:", get_generation(model_id, prompt, input_image_path))
-    if has_attack_image:
-        print("\nAttack answer:", get_generation(model_id, prompt, attack_image_file))
+    
+    # Check if attack files exist and evaluate them
+    attack_tensor_file = f"{attack_image_base}.pt"
+    if os.path.exists(attack_tensor_file):
+        # Load and evaluate the tensor file
+        tensor_image = load_image_tensor(attack_tensor_file)
+        print("\nAttack answer (from tensor file):", run_inference(model_id, prompt, tensor_image))
 
+
+def inference():
+    # Setup environment and authentication
+    load_dotenv()
+    login(os.environ['HF_KEY'])
+
+    # Hardcoded parameters
+    tensor_name = "math"
+    model_id = Models.PALIGEMMA2_10B
+
+    # Get the local path to the attack directory
+    script_path = "/".join(__file__.split("/")[:-1])
+    attack_dir = os.path.join(script_path, "../images/attack")
+
+    # Construct the full path to the tensor file
+    tensor_file_path = os.path.join(attack_dir, f"{tensor_name}.pt")
+
+    # Check if the tensor file exists
+    if not os.path.exists(tensor_file_path):
+        print(f"Tensor file {tensor_file_path} does not exist.")
+        return
+
+    # Load the tensor
+    tensor_image = load_image_tensor(tensor_file_path)
+
+    # Run inference on the loaded tensor
+    prompt = "Answer the question."
+    print("\nInference result:", run_inference(model_id, prompt, tensor_image))
 
 if __name__ == "__main__":
-    main()
+    attack()

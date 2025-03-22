@@ -200,6 +200,8 @@ class BasePGDAttack:
             Tuple of (numpy_image, tensor_image) where:
             - numpy_image: numpy array of shape [H, W, C] in range [0, 1]
             - tensor_image: PyTorch tensor of shape [1, C, H, W]
+            
+        Note: The calling function pgd_attack() will only return tensor_image.
         """
         # Process the image and text prompt
         image = Image.open(image_path).convert("RGB")
@@ -305,9 +307,6 @@ class BasePGDAttack:
                 
                 # Apply momentum update
                 processed_image = processed_image + momentum
-                # Print the shape and some values of the processed image
-                print(f"Processed image shape: {processed_image.shape}")
-                print(f"Processed image values (sample): {processed_image.flatten()[:10].tolist()}")
                 
                 # Project back to epsilon ball
                 perturbation = torch.clamp(processed_image - original_image, -self.epsilon, self.epsilon)
@@ -343,14 +342,8 @@ class BasePGDAttack:
         # Save the tensor version before any transformations
         tensor_image = processed_image.clone()
         
-        # Process the final perturbed image for numpy output
-        perturbed_image = processed_image.squeeze(0).permute(1, 2, 0).cpu().detach().numpy()
-        
-        # Final image with simulated quantization (important for robustness)
-        perturbed_image = np.clip(perturbed_image * 255, 0, 255).round() / 255
-        
         # Return both formats
-        return perturbed_image, tensor_image
+        return tensor_image
 
 
 # ==============================================
@@ -701,7 +694,7 @@ class LlavaAttack(BasePGDAttack):
                 # Quantize directly to valid 8-bit values (multiples of 1/255)
                 with torch.no_grad():
                     # Round to nearest 8-bit pixel values
-                    processed_image = torch.round(processed_image * 255) / 255
+                    # processed_image = torch.round(processed_image * 255) / 255
                     
                     # Ensure values stay in valid range after rounding
                     processed_image = torch.clamp(processed_image, 0, 1)
@@ -729,17 +722,10 @@ class LlavaAttack(BasePGDAttack):
             print(f"\nUsing best image with probability {best_prob:.4f}")
             processed_image = best_image
             
-        # Return both the processed tensor and a numpy version
         # The tensor retains the exact values without quantization
         tensor_image = processed_image.clone()
-        
-        # Process for numpy output
-        perturbed_image = processed_image.squeeze(0).permute(1, 2, 0).cpu().detach().numpy()
-        
-        # Final image with simulated quantization (important for robustness)
-        perturbed_image = np.clip(perturbed_image * 255, 0, 255).round() / 255
-        
-        return perturbed_image, tensor_image
+                
+        return tensor_image
 
 
 def pgd_attack(model_id, prompt, image_path, target_sequence, 
@@ -763,7 +749,7 @@ def pgd_attack(model_id, prompt, image_path, target_sequence,
         scheduler_type: Type of scheduler to use (linear, cosine, polynomial)
         
     Returns:
-        Tuple of (numpy_image, tensor_image) containing the perturbed image in both formats
+        PyTorch tensor containing the optimized image
     """
     # Get the appropriate attack class for this model
     attack_class = AttackRegistry.get_attack_function(model_id)
@@ -780,5 +766,4 @@ def pgd_attack(model_id, prompt, image_path, target_sequence,
         scheduler_type=scheduler_type
     )
     
-    # Run the attack
     return attack.pgd_attack(prompt, image_path, target_sequence)

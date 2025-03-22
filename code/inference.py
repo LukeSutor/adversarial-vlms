@@ -7,7 +7,7 @@ import numpy as np
 from typing import Dict, Optional, Any, Union
 import shutil
 import pathlib
-from utils import load_image, convert_tensor_to_pil
+from utils import load_image, process_image_input
 
 # Default model cache directory
 DEFAULT_CACHE_DIR = "/blue/rcstudents/luke.sutor/adversarial-vlms/models/"
@@ -186,42 +186,6 @@ def set_models_directory(new_directory):
     """Set the directory where models will be cached"""
     return model_manager.set_cache_directory(new_directory)
 
-def process_image_input(image_input, processor=None, model_device=None):
-    """
-    Process image input based on its type.
-    
-    Args:
-        image_input: String path, PIL Image, or PyTorch tensor
-        processor: Model processor (if needed for tensor normalization)
-        model_device: Device to place tensor on
-        
-    Returns:
-        Tuple of (processed_input, is_raw_tensor, tensor_image)
-        - processed_input: PIL Image for proper token generation
-        - is_raw_tensor: Boolean indicating if original input was a tensor
-        - tensor_image: The original tensor if input was tensor, None otherwise
-    """
-    is_tensor = isinstance(image_input, torch.Tensor)
-    tensor_image = None
-    
-    if is_tensor:
-        # For tensor inputs, create a PIL image for token generation
-        # but also keep the original tensor for later substitution
-        if image_input.requires_grad:
-            tensor_image = image_input.detach()
-        else:
-            tensor_image = image_input.clone()
-            
-        # Move to right device if needed
-        if model_device and tensor_image.device.type != model_device:
-            tensor_image = tensor_image.to(model_device)
-            
-        # Create a PIL version for token generation
-        pil_image = convert_tensor_to_pil(image_input)
-        return pil_image, True, tensor_image
-    else:
-        # For path or PIL image, load normally
-        return load_image(image_input), False, None
 
 def run_inference_paligemma(
     model_id: str,

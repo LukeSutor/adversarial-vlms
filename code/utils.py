@@ -148,6 +148,39 @@ def save_image(perturbed_image, output_path="perturbed_image.png", save_tensor=F
     image.save(output_path, format='PNG', compress_level=0, optimize=False)
     print(f"Saved attack image to {output_path}")
 
+def save_attack_results(tensor_image, base_path):
+    """
+    Save both tensor and PNG versions of an attack result.
+    
+    Args:
+        tensor_image: PyTorch tensor containing image data
+        base_path: Base path without extension for saving files
+    
+    Returns:
+        Tuple of (tensor_path, png_path)
+    """
+    # Ensure the tensor is detached from computation graph and moved to CPU
+    if tensor_image.requires_grad:
+        tensor_image = tensor_image.detach()
+    
+    if tensor_image.device.type != 'cpu':
+        tensor_image = tensor_image.cpu()
+    
+    # Create paths
+    tensor_path = f"{base_path}.pt"
+    png_path = f"{base_path}.png"
+    
+    # Save tensor version
+    torch.save(tensor_image, tensor_path)
+    print(f"Saved tensor image to {tensor_path}")
+    
+    # Convert to PIL and save as PNG
+    pil_image = convert_tensor_to_pil(tensor_image)
+    pil_image.save(png_path, format='PNG', compress_level=0, optimize=False)
+    print(f"Saved PNG image to {png_path}")
+    
+    return tensor_path, png_path
+
 # Helper function to load and process images
 def load_image(image_input):
     """
@@ -190,3 +223,110 @@ def load_image(image_input):
         return Image.fromarray(np_image)
     else:
         raise ValueError(f"Unsupported image input type: {type(image_input)}")
+
+def process_image_input(image_input, processor=None, model_device=None):
+    """
+    Process image input based on its type.
+    
+    Args:
+        image_input: String path, PIL Image, or PyTorch tensor
+        processor: Model processor (if needed for tensor normalization)
+        model_device: Device to place tensor on
+        
+    Returns:
+        Tuple of (processed_input, is_raw_tensor, tensor_image)
+        - processed_input: PIL Image for proper token generation
+        - is_raw_tensor: Boolean indicating if original input was a tensor
+        - tensor_image: The original tensor if input was tensor, None otherwise
+    """
+    is_tensor = isinstance(image_input, torch.Tensor)
+    tensor_image = None
+    
+    if is_tensor:
+        # For tensor inputs, create a PIL image for token generation
+        # but also keep the original tensor for later substitution
+        if image_input.requires_grad:
+            tensor_image = image_input.detach()
+        else:
+            tensor_image = image_input.clone()
+            
+        # Move to right device if needed
+        if model_device and tensor_image.device.type != model_device:
+            tensor_image = tensor_image.to(model_device)
+            
+        # Create a PIL version for token generation
+        pil_image = convert_tensor_to_pil(image_input)
+        return pil_image, True, tensor_image
+    else:
+        # For path or PIL image, load normally
+        return load_image(image_input), False, None
+
+def resize_images_with_padding(directory_path, target_size=(224, 224), fill_color=(255, 255, 255)):
+    """
+    Resize all images in a directory to the specified size, preserving aspect ratio
+    and adding padding to reach the target size. Overwrites the original files.
+    
+    Args:
+        directory_path: Path to directory containing images
+        target_size: Tuple (width, height) for target size
+        fill_color: Tuple (R, G, B) for padding color (white by default)
+    """
+    # Check if directory exists
+    if not os.path.exists(directory_path):
+        print(f"Directory {directory_path} does not exist.")
+        return
+    
+    # Get all image files in directory
+    image_extensions = ['.png', '.jpg', '.jpeg', '.bmp', '.gif', '.webp']
+    image_files = [f for f in os.listdir(directory_path) 
+                  if os.path.isfile(os.path.join(directory_path, f)) and 
+                  os.path.splitext(f)[1].lower() in image_extensions]
+    
+    if not image_files:
+        print(f"No image files found in {directory_path}")
+        return
+    
+    # Process each image
+    for img_file in image_files:
+        img_path = os.path.join(directory_path, img_file)
+        try:
+            # Open image
+            img = Image.open(img_path).convert("RGB")
+            
+            # Get current dimensions
+            width, height = img.size
+            
+            # Calculate aspect ratios
+            target_ratio = target_size[0] / target_size[1]
+            img_ratio = width / height
+            
+            if img_ratio > target_ratio:
+                # Image is wider than target ratio, fit to width
+                new_width = target_size[0]
+                new_height = int(new_width / img_ratio)
+            else:
+                # Image is taller than target ratio, fit to height
+                new_height = target_size[1]
+                new_width = int(new_height * img_ratio)
+            
+            # Resize image preserving aspect ratio
+            img_resized = img.resize((new_width, new_height), Image.LANCZOS)
+            
+            # Create new white image with target size
+            new_img = Image.new('RGB', target_size, fill_color)
+            
+            # Calculate position to paste (center)
+            paste_x = (target_size[0] - new_width) // 2
+            paste_y = (target_size[1] - new_height) // 2
+            
+            # Paste resized image onto padded background
+            new_img.paste(img_resized, (paste_x, paste_y))
+            
+            # Save back to original path (overwriting)
+            new_img.save(img_path)
+            print(f"Resized {img_file} to {target_size}")
+            
+        except Exception as e:
+            print(f"Error processing {img_file}: {e}")
+    
+    print(f"Finished processing {len(image_files)} images in {directory_path}")
