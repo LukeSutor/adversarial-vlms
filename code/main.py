@@ -3,6 +3,7 @@ from dotenv import load_dotenv
 import torch
 from PIL import Image
 from huggingface_hub import login
+import json
 import sys
 # Append the current file directory to the system path
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -12,7 +13,7 @@ sys.path.append(current_dir)
 from inference import model_manager, set_models_directory, run_inference, Models
 from attacks import pgd_attack, get_token_id, get_generation
 from utils import (load_image_tensor, convert_tensor_to_pil, save_attack_results, 
-                  resize_images_with_padding, update_image_data_json, get_clean_filename)
+                  resize_images_with_padding, update_image_data_json, get_clean_filename, update_clean_image_output)
 
 def attack(input_image_path, model_id, target_sequence, prompt, epsilon=0.1, 
            alpha_max=0.01, alpha_min=0.0001, num_iter=200, warmup_ratio=0.2,
@@ -46,7 +47,7 @@ def attack(input_image_path, model_id, target_sequence, prompt, epsilon=0.1,
     # Get clean filename without extension for naming the attack file
     clean_filename = get_clean_filename(input_image_path)
     
-    # Save attacked images to attack directory with model info in filename
+    # Save attacked images to attack directory (model subfolder will be created in save_attack_results)
     attack_image_base = os.path.join(attack_dir, clean_filename)
 
     print(f"Performing attack on model: {model_id}...")
@@ -66,9 +67,8 @@ def attack(input_image_path, model_id, target_sequence, prompt, epsilon=0.1,
         scheduler_type=scheduler_type
     )
     
-    # Save both tensor and PNG versions using the utility function
-    # Include model ID in the filename
-    tensor_path, png_path = save_attack_results(tensor_image, attack_image_base, model_id)
+    # Save only the tensor version (PT file) in model-specific subfolder
+    tensor_path = save_attack_results(tensor_image, attack_image_base, model_id)
     
     # Get the filename without extension for JSON entry
     attack_filename = get_clean_filename(tensor_path)
@@ -79,8 +79,17 @@ def attack(input_image_path, model_id, target_sequence, prompt, epsilon=0.1,
     print(f"Attack result with {model_id.split('/')[-1]}:")
     print(inference_result)
     
-    # Update the JSON file with this inference result
-    update_image_data_json(attack_filename, model_id, inference_result)
+    # Collect attack parameters for JSON
+    attack_params = {
+        "epsilon": epsilon,
+        "alpha": alpha_max,  # Save the maximum alpha
+        "iterations": num_iter,
+        "scheduler": scheduler_type,
+        "warmup_ratio": warmup_ratio
+    }
+    
+    # Update the JSON file with this inference result and attack parameters
+    update_image_data_json(attack_filename, model_id, inference_result, attack_params)
     
     # Also run inference on the original image for comparison
     print("\nEvaluating original image for comparison...")
@@ -88,7 +97,7 @@ def attack(input_image_path, model_id, target_sequence, prompt, epsilon=0.1,
     print(f"Original image response with {model_id.split('/')[-1]}:")
     print(original_result)
     
-    return tensor_path, png_path, inference_result
+    return tensor_path, inference_result
 
 
 def inference():
@@ -119,29 +128,109 @@ def inference():
     # Update the JSON file with this inference result
     update_image_data_json(tensor_name, model_id, inference_result)
 
+
+def evaluate_clean_images(models, prompt="Answer the question."):
+    """
+    Evaluate all clean images with specified models and update image_data.json.
+    Works with the new JSON structure where images are stored under the "images" key.
+    Ensures that each image has the required structure fields.
+    
+    Args:
+        models: List of model IDs to use for evaluation
+        prompt: Text prompt to use with each image
+    """
+    # Setup environment and authentication
+    load_dotenv()
+    login(os.environ['HF_KEY'])
+    
+    # Get paths
+    script_path = "/".join(__file__.split("/")[:-1])
+    image_dir = os.path.join(script_path, "../images")
+    clean_dir = os.path.join(image_dir, "clean")
+    json_path = os.path.join(image_dir, "image_data.json")
+    
+    # Load image data
+    try:
+        with open(json_path, 'r') as file:
+            image_data = json.load(file)
+    except Exception as e:
+        print(f"Error loading image data: {e}")
+        return
+    
+    # Ensure images dict exists
+    if "images" not in image_data or not image_data["images"]:
+        print("No images found in image_data.json")
+        return
+    
+    # Count how many images we'll process
+    num_images = len(image_data["images"])
+    print(f"Evaluating {num_images} clean images with {len(models)} models")
+    
+    # Initialize the structure for each image if missing
+    for image_name, image_info in image_data["images"].items():
+        filename = image_info.get("metadata", {}).get("filename", f"{image_name}.png")
+        
+        # Ensure clean field exists
+        if "clean" not in image_info:
+            image_info["clean"] = {
+                "path": f"clean/{filename}",
+                "model_outputs": {}
+            }
+        
+        # Ensure attacks field exists
+        if "attacks" not in image_info:
+            image_info["attacks"] = {}
+    
+    # Save the updated structure back to the file
+    try:
+        with open(json_path, 'w') as file:
+            json.dump(image_data, file, indent=2)
+        print(f"Updated JSON file with required structure fields")
+    except Exception as e:
+        print(f"Error writing to JSON file: {e}")
+    
+    # Process each image with each model
+    for i, (image_name, image_info) in enumerate(image_data["images"].items()):
+        filename = image_info.get("metadata", {}).get("filename", f"{image_name}.png")
+        image_path = os.path.join(clean_dir, filename)
+        
+        # Skip if image doesn't exist
+        if not os.path.exists(image_path):
+            print(f"WARNING: Image file {image_path} not found. Skipping.")
+            continue
+        
+        print(f"\n[{i+1}/{num_images}] Evaluating {filename}")
+        
+        # Get the question for context
+        question = image_info.get("metadata", {}).get("question", "")
+        if question:
+            print(f"  Question: {question}")
+        
+        # Evaluate with each model
+        for model_id in models:
+            model_name = model_id.split('/')[-1]
+            print(f"  Using model: {model_name}")
+            
+            try:
+                # Run inference
+                result = run_inference(model_id, prompt, image_path)
+                print(f"  Output: {result}")
+                
+                # Update JSON with results using the new structure
+                update_clean_image_output(image_name, model_id, result)
+                
+            except Exception as e:
+                print(f"  ERROR with model {model_name}: {str(e)}")
+    
+    print("\nAll evaluations completed!")
+
+
 if __name__ == "__main__":
     # Setup environment and authentication
     load_dotenv()
     login(os.environ['HF_KEY'])
     
-    # Get the path to the clean images
-    script_path = "/".join(__file__.split("/")[:-1])
-    clean_dir = os.path.join(script_path, "../images/clean")
-    
-    # Specify the image file and model to use
-    input_image = os.path.join(clean_dir, "math.png")
-    model = Models.PALIGEMMA2_3B
-    
-    # Call the attack function with the specified image and model
-    tensor_path, png_path, result = attack(
-        input_image,
-        model,
-        "hello",
-        "Answer the question.",
-        num_iter=200  # Reduced for faster execution
-    )
-    
-    print(f"\nAttack completed successfully.")
-    print(f"Tensor saved to: {tensor_path}")
-    print(f"PNG image saved to: {png_path}")
-    print(f"Attack result: {result[:100]}...")  # Show first 100 chars of result
+    # Example of running the clean image evaluation
+    evaluate_clean_images([
+        Models.PALIGEMMA2_3B
+    ])

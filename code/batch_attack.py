@@ -17,6 +17,7 @@ from utils import get_clean_filename
 def process_image_batch():
     """
     Process all images from image_data.json and run attacks using their target answers.
+    Updated to work with the new JSON structure.
     """
     # Setup environment and authentication
     load_dotenv()
@@ -44,9 +45,9 @@ def process_image_batch():
         print(f"Error loading image data: {e}")
         return
     
-    # Check if clean images info exists
-    if "clean" not in image_data or not image_data["clean"]:
-        print("No clean images found in image_data.json")
+    # Check if images exist in the new format
+    if "images" not in image_data or not image_data["images"]:
+        print("No images found in image_data.json")
         return
     
     # Set universal parameters
@@ -61,26 +62,38 @@ def process_image_batch():
     }
     
     # Process each image
-    print(f"Found {len(image_data['clean'])} images to process")
+    images_to_process = image_data["images"]
+    print(f"Found {len(images_to_process)} images to process")
     
-    for i, image_info in enumerate(image_data["clean"]):
-        image_name = image_info["name"]
-        target_answer = image_info["target_answer"]
+    for i, (image_name, image_info) in enumerate(images_to_process.items()):
+        if i >= 2:
+            continue
+        metadata = image_info.get("metadata", {})
+        filename = metadata.get("filename", f"{image_name}.png")
+        target_answer = metadata.get("target_answer", "")
+        question = metadata.get("question", "")
         
-        print(f"\n[{i+1}/{len(image_data['clean'])}] Processing {image_name}")
+        print(f"\n[{i+1}/{len(images_to_process)}] Processing {filename}")
+        if question:
+            print(f"  Question: {question}")
         print(f"  Target answer: {target_answer}")
         
         # Full path to the clean image
-        input_image_path = os.path.join(clean_dir, image_name)
+        input_image_path = os.path.join(clean_dir, filename)
         
         # Skip if image doesn't exist
         if not os.path.exists(input_image_path):
             print(f"  WARNING: Image file {input_image_path} not found. Skipping.")
             continue
         
+        # Skip if no target answer is provided
+        if not target_answer:
+            print(f"  WARNING: No target answer provided for {filename}. Skipping.")
+            continue
+        
         try:
             # Run attack with parameters from the JSON file
-            tensor_path, png_path, result = attack(
+            tensor_path, result = attack(
                 input_image_path=input_image_path,
                 model_id=model,
                 target_sequence=target_answer,
@@ -89,10 +102,10 @@ def process_image_batch():
             )
             
             print(f"  Attack complete - Output: {result}")
-            print(f"  Files saved: {tensor_path}, {png_path}")
+            print(f"  File saved: {tensor_path}")
             
         except Exception as e:
-            print(f"  ERROR processing {image_name}: {e}")
+            print(f"  ERROR processing {filename}: {e}")
     
     print("\nAll attacks completed!")
 

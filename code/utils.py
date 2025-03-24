@@ -152,16 +152,15 @@ def save_image(perturbed_image, output_path="perturbed_image.png", save_tensor=F
 
 def save_attack_results(tensor_image, base_path, model_id=None):
     """
-    Save both tensor and PNG versions of an attack result.
-    Includes model information in the filename if provided.
+    Save tensor version of an attack result in a model-specific folder.
     
     Args:
         tensor_image: PyTorch tensor containing image data
         base_path: Base path without extension for saving files
-        model_id: Optional model identifier to include in filename
+        model_id: Model identifier used for folder organization
     
     Returns:
-        Tuple of (tensor_path, png_path)
+        Path to the saved tensor file
     """
     # Ensure the tensor is detached from computation graph and moved to CPU
     if tensor_image.requires_grad:
@@ -174,26 +173,23 @@ def save_attack_results(tensor_image, base_path, model_id=None):
     directory = os.path.dirname(base_path)
     filename = os.path.basename(base_path)
     
-    # If model_id is provided, add it to the filename
+    # Create model-specific subfolder in the attack directory
     if model_id:
         # Extract model name from the full path/identifier
         model_name = model_id.split('/')[-1].lower() if '/' in model_id else model_id.lower()
-        filename = f"{filename}_{model_name}"
+        model_directory = os.path.join(directory, model_name)
+        os.makedirs(model_directory, exist_ok=True)
+    else:
+        model_directory = directory
     
-    # Create full paths
-    tensor_path = os.path.join(directory, f"{filename}.pt")
-    png_path = os.path.join(directory, f"{filename}.png")
+    # Create full path for tensor file only
+    tensor_path = os.path.join(model_directory, f"{filename}.pt")
     
     # Save tensor version
     torch.save(tensor_image, tensor_path)
     print(f"Saved tensor image to {tensor_path}")
     
-    # Convert to PIL and save as PNG
-    pil_image = convert_tensor_to_pil(tensor_image)
-    pil_image.save(png_path, format='PNG', compress_level=0, optimize=False)
-    print(f"Saved PNG image to {png_path}")
-    
-    return tensor_path, png_path
+    return tensor_path
 
 # Helper function to load and process images
 def load_image(image_input):
@@ -345,12 +341,117 @@ def resize_images_with_padding(directory_path, target_size=(224, 224), fill_colo
     
     print(f"Finished processing {len(image_files)} images in {directory_path}")
 
-def update_image_data_json(attack_file, model_id, model_output, json_path=None):
+def update_image_data_json(attack_file, model_id, model_output, attack_params=None, json_path=None):
     """
     Update the image_data.json file with model inference results for an attack image.
+    Uses the new hierarchical data structure.
     
     Args:
-        attack_file: Name of the attack pt/png file (without extension)
+        attack_file: Name of the attack pt file (without extension)
+        model_id: The model identifier used for inference
+        model_output: The text output from the model
+        attack_params: Optional dictionary of attack parameters
+        json_path: Path to the json file (if None, uses default path)
+    
+    Returns:
+        Dict containing the updated JSON data
+    """
+    # Use current script directory as reference to find images directory
+    script_path = os.path.dirname(os.path.abspath(__file__))
+    image_dir = os.path.join(script_path, "../images")
+    
+    # Set default json_path if not provided
+    if json_path is None:
+        json_path = os.path.join(image_dir, "image_data.json")
+    
+    # Load existing JSON data or create empty structure
+    try:
+        if os.path.exists(json_path):
+            with open(json_path, 'r') as file:
+                data = json.load(file)
+        else:
+            data = {"images": {}}
+    except json.JSONDecodeError:
+        print(f"Error parsing JSON from {json_path}, creating new structure")
+        data = {"images": {}}
+    except Exception as e:
+        print(f"Error loading JSON file: {e}")
+        data = {"images": {}}
+    
+    # Ensure images dict exists
+    if "images" not in data:
+        data["images"] = {}
+    
+    # Extract model name for easier identification
+    model_name = model_id.split('/')[-1] if '/' in model_id else model_id
+    
+    # Extract the clean image name (remove model folder path if present)
+    if '/' in attack_file:
+        # We have a path like 'model_name/image_name', extract just image_name
+        base_name = os.path.basename(attack_file)
+    else:
+        base_name = attack_file
+    
+    # Get the image name (this is what we use as key in the images dict)
+    image_name = base_name
+    
+    # Ensure the image entry exists
+    if image_name not in data["images"]:
+        # If this is a new image, create all required structures
+        data["images"][image_name] = {
+            "metadata": {
+                "filename": f"{image_name}.png",
+                "question": "",  # Default empty question
+                "correct_answer": "",  # Default empty answer
+                "target_answer": ""  # Default empty target
+            },
+            "clean": {
+                "path": f"clean/{image_name}.png",
+                "model_outputs": {}
+            },
+            "attacks": {}
+        }
+    
+    # Create timestamp for tracking when inference was run
+    timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
+    
+    # Create or update the attack entry for this model
+    if model_name not in data["images"][image_name]["attacks"]:
+        # Initialize attack entry
+        data["images"][image_name]["attacks"][model_name] = {
+            "metadata": {
+                "model_used": model_id,
+                "path": f"attack/{model_name}/{image_name}.pt",
+                "attack_parameters": attack_params or {},
+                "generation_date": timestamp
+            },
+            "model_outputs": {}
+        }
+    
+    # Add or update the model output for this attack
+    data["images"][image_name]["attacks"][model_name]["model_outputs"][model_id] = {
+        "output": model_output,
+        "timestamp": timestamp
+    }
+    
+    # Write updated data back to file
+    try:
+        os.makedirs(os.path.dirname(json_path), exist_ok=True)
+        with open(json_path, 'w') as file:
+            json.dump(data, file, indent=2)
+        print(f"Updated {json_path} with attack results from {model_name}")
+    except Exception as e:
+        print(f"Error writing to JSON file: {e}")
+    
+    return data
+
+def update_clean_image_output(image_name, model_id, model_output, json_path=None):
+    """
+    Update the image_data.json file with model inference results for a clean image.
+    Uses the new hierarchical data structure.
+    
+    Args:
+        image_name: Name of the clean image file
         model_id: The model identifier used for inference
         model_output: The text output from the model
         json_path: Path to the json file (if None, uses default path)
@@ -372,58 +473,83 @@ def update_image_data_json(attack_file, model_id, model_output, json_path=None):
             with open(json_path, 'r') as file:
                 data = json.load(file)
         else:
-            data = {"attacks": {}}
+            data = {"images": {}}
     except json.JSONDecodeError:
         print(f"Error parsing JSON from {json_path}, creating new structure")
-        data = {"attacks": {}}
+        data = {"images": {}}
     except Exception as e:
         print(f"Error loading JSON file: {e}")
-        data = {"attacks": {}}
+        data = {"images": {}}
     
-    # Ensure attacks dict exists
-    if "attacks" not in data:
-        data["attacks"] = {}
+    # Ensure images dict exists
+    if "images" not in data:
+        data["images"] = {}
     
-    # Extract model name for easier identification
-    model_name = model_id.split('/')[-1] if '/' in model_id else model_id
+    # Extract just the filename without path or extension
+    base_name = get_clean_filename(image_name) if '.' in image_name else image_name
+    
+    # Ensure the image entry exists
+    if base_name not in data["images"]:
+        # If this is a new image, create all required structures
+        data["images"][base_name] = {
+            "metadata": {
+                "filename": f"{base_name}.png",
+                "question": "",  # Default empty question
+                "correct_answer": "",  # Default empty answer
+                "target_answer": ""  # Default empty target
+            },
+            "clean": {
+                "path": f"clean/{base_name}.png",
+                "model_outputs": {}
+            },
+            "attacks": {}
+        }
     
     # Create timestamp for tracking when inference was run
     timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
     
-    # Update entry for this attack file
-    if attack_file not in data["attacks"]:
-        data["attacks"][attack_file] = []
-    
-    # Add or update the model result
-    entry = {
-        "model": model_id,
-        "model_name": model_name,
+    # Add or update the model output for the clean image
+    data["images"][base_name]["clean"]["model_outputs"][model_id] = {
         "output": model_output,
         "timestamp": timestamp
     }
-    
-    # Check if we already have an entry for this model and replace it
-    updated = False
-    for i, existing in enumerate(data["attacks"][attack_file]):
-        if existing.get("model") == model_id:
-            data["attacks"][attack_file][i] = entry
-            updated = True
-            break
-    
-    # If no existing entry found, append new one
-    if not updated:
-        data["attacks"][attack_file].append(entry)
     
     # Write updated data back to file
     try:
         os.makedirs(os.path.dirname(json_path), exist_ok=True)
         with open(json_path, 'w') as file:
             json.dump(data, file, indent=2)
-        print(f"Updated {json_path} with results from {model_name}")
+        print(f"Updated clean image outputs for {base_name} with {model_id}")
     except Exception as e:
         print(f"Error writing to JSON file: {e}")
     
     return data
+
+def get_attack_parameters(input_dict):
+    """
+    Extract attack parameters from an input dictionary, using standard parameter names.
+    
+    Args:
+        input_dict: Dictionary containing attack parameters
+        
+    Returns:
+        Formatted attack parameter dictionary with standardized keys
+    """
+    # Map common parameter names to standardized keys
+    params = {}
+    
+    # Extract common parameters with fallbacks
+    params["epsilon"] = input_dict.get("epsilon", 0.1)
+    params["alpha"] = input_dict.get("alpha_max", input_dict.get("alpha", 0.01))
+    params["iterations"] = input_dict.get("num_iter", input_dict.get("iterations", 200))
+    
+    # Include other parameters if they exist
+    if "scheduler_type" in input_dict:
+        params["scheduler"] = input_dict["scheduler_type"]
+    if "warmup_ratio" in input_dict:
+        params["warmup_ratio"] = input_dict["warmup_ratio"]
+    
+    return params
 
 def get_clean_filename(image_path):
     """
