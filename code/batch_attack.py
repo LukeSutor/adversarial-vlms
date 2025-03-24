@@ -66,8 +66,6 @@ def process_image_batch():
     print(f"Found {len(images_to_process)} images to process")
     
     for i, (image_name, image_info) in enumerate(images_to_process.items()):
-        if i >= 2:
-            continue
         metadata = image_info.get("metadata", {})
         filename = metadata.get("filename", f"{image_name}.png")
         target_answer = metadata.get("target_answer", "")

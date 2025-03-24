@@ -5,26 +5,6 @@ import os
 import json
 import time
 
-def save_image_tensor(tensor_image, output_path="perturbed_tensor.pt"):
-    """
-    Save the image as a PyTorch tensor file (.pt) to preserve exact pixel values
-    without quantization errors.
-    
-    Args:
-        tensor_image: PyTorch tensor containing image data
-        output_path: Path where to save the tensor file
-    """
-    # Ensure the tensor is detached from computation graph and moved to CPU
-    if tensor_image.requires_grad:
-        tensor_image = tensor_image.detach()
-    
-    if tensor_image.device.type != 'cpu':
-        tensor_image = tensor_image.cpu()
-    
-    # Save the tensor
-    torch.save(tensor_image, output_path)
-    print(f"Saved tensor image to {output_path}")
-
 
 def load_image_tensor(input_path, device='cpu'):
     """
@@ -103,52 +83,6 @@ def convert_pil_to_tensor(pil_image, add_batch_dim=False, device='cpu'):
     
     return tensor_image
 
-
-def save_image(perturbed_image, output_path="perturbed_image.png", save_tensor=False):
-    """
-    Save perturbed image with special handling for robustness.
-    Can save both as PNG and as PyTorch tensor.
-    
-    Args:
-        perturbed_image: NumPy array or PyTorch tensor containing the image
-        output_path: Path for the output file
-        save_tensor: Whether to also save the tensor version
-    """
-    # Check if input is a tensor
-    is_tensor = isinstance(perturbed_image, torch.Tensor)
-    
-    # Handle tensor input
-    if is_tensor:
-        # Save tensor version if requested (before any transformations)
-        if save_tensor:
-            tensor_path = os.path.splitext(output_path)[0] + '.pt'
-            save_image_tensor(perturbed_image, tensor_path)
-        
-        # Convert to numpy for PNG saving
-        if perturbed_image.requires_grad:
-            perturbed_image = perturbed_image.detach()
-        
-        if perturbed_image.dim() == 4:  # If has batch dimension [1, C, H, W]
-            perturbed_image = perturbed_image.squeeze(0)
-            
-        # Rearrange from [C, H, W] to [H, W, C]
-        perturbed_image = perturbed_image.permute(1, 2, 0).cpu().numpy()
-    else:
-        # For numpy input, still save tensor version if requested
-        if save_tensor:
-            tensor_path = os.path.splitext(output_path)[0] + '.pt'
-            tensor_image = torch.from_numpy(perturbed_image.transpose(2, 0, 1).copy())
-            save_image_tensor(tensor_image, tensor_path)
-    
-    # Convert the image to 8-bit format
-    perturbed_image_8bit = np.clip(perturbed_image * 255, 0, 255).round().astype(np.uint8)
-    
-    # Create PIL image
-    image = Image.fromarray(perturbed_image_8bit)
-    
-    # Save with no compression to preserve details
-    image.save(output_path, format='PNG', compress_level=0, optimize=False)
-    print(f"Saved attack image to {output_path}")
 
 def save_attack_results(tensor_image, base_path, model_id=None):
     """

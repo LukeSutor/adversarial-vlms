@@ -8,7 +8,7 @@ import math
 # Import the ModelManager from inference.py
 from inference import model_manager, set_models_directory, run_inference, Models
 # Import utility functions from utils.py
-from utils import save_image_tensor, load_image_tensor, convert_tensor_to_pil, convert_pil_to_tensor, save_image
+from utils import load_image_tensor, convert_tensor_to_pil, convert_pil_to_tensor
 
 
 # Default model cache directory
