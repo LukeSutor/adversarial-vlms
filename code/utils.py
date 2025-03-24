@@ -84,7 +84,7 @@ def convert_pil_to_tensor(pil_image, add_batch_dim=False, device='cpu'):
     return tensor_image
 
 
-def save_attack_results(tensor_image, base_path, model_id=None):
+def save_attack_results(tensor_image, base_path, model_id):
     """
     Save tensor version of an attack result in a model-specific folder.
     
@@ -108,13 +108,9 @@ def save_attack_results(tensor_image, base_path, model_id=None):
     filename = os.path.basename(base_path)
     
     # Create model-specific subfolder in the attack directory
-    if model_id:
-        # Extract model name from the full path/identifier
-        model_name = model_id.split('/')[-1].lower() if '/' in model_id else model_id.lower()
-        model_directory = os.path.join(directory, model_name)
-        os.makedirs(model_directory, exist_ok=True)
-    else:
-        model_directory = directory
+    model_name = model_id.split('/')[-1].lower() if '/' in model_id else model_id.lower()
+    model_directory = os.path.join(directory, model_name)
+    os.makedirs(model_directory, exist_ok=True)
     
     # Create full path for tensor file only
     tensor_path = os.path.join(model_directory, f"{filename}.pt")

@@ -5,6 +5,7 @@ from PIL import Image
 from huggingface_hub import login
 import json
 import sys
+import time
 # Append the current file directory to the system path
 current_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(current_dir)
@@ -225,12 +226,144 @@ def evaluate_clean_images(models, prompt="Answer the question."):
     print("\nAll evaluations completed!")
 
 
+def evaluate_attack_images(models, prompt="Answer the question.", replace_existing=False):
+    """
+    Evaluate all attack images with specified models and update image_data.json.
+    Works with the new hierarchical data structure where attack images are stored
+    in model-specific subfolders.
+    
+    Args:
+        models: List of model IDs to use for evaluation
+        prompt: Text prompt to use with each image
+        replace_existing: If False, skip evaluations for model-attack combinations 
+                          that already have results
+    """
+    # Setup environment and authentication
+    load_dotenv()
+    login(os.environ['HF_KEY'])
+    
+    # Get paths
+    script_path = "/".join(__file__.split("/")[:-1])
+    image_dir = os.path.join(script_path, "../images")
+    attack_dir = os.path.join(image_dir, "attack")
+    json_path = os.path.join(image_dir, "image_data.json")
+    
+    # Load image data
+    try:
+        with open(json_path, 'r') as file:
+            image_data = json.load(file)
+    except Exception as e:
+        print(f"Error loading image data: {e}")
+        return
+    
+    # Ensure images dict exists
+    if "images" not in image_data:
+        print("No images found in image_data.json")
+        return
+    
+    # Count how many attack images we'll process
+    attack_count = 0
+    total_images = 0
+    for image_name, image_info in image_data["images"].items():
+        if "attacks" in image_info and image_info["attacks"]:
+            attack_count += len(image_info["attacks"])
+            total_images += 1
+    
+    if attack_count == 0:
+        print("No attack images found in image_data.json")
+        return
+    
+    print(f"Found {attack_count} attack images across {total_images} base images")
+    print(f"Evaluating with {len(models)} models")
+    
+    # Process each image with each model
+    processed_count = 0
+    
+    for image_name, image_info in image_data["images"].items():
+        if "attacks" not in image_info or not image_info["attacks"]:
+            continue
+            
+        print(f"\nProcessing attacks for image: {image_name}")
+        
+        # Get the question for context
+        question = image_info.get("metadata", {}).get("question", "")
+        if question:
+            print(f"  Question: {question}")
+        
+        # Process each attack for this image
+        for attack_model_name, attack_info in image_info["attacks"].items():
+            processed_count += 1
+            print(f"\n  [{processed_count}/{attack_count}] Evaluating {attack_model_name} attack")
+            
+            # Get the path to the attack tensor
+            attack_path = attack_info.get("metadata", {}).get("path")
+            if not attack_path:
+                print(f"    Missing path for {attack_model_name} attack, skipping")
+                continue
+                
+            tensor_path = os.path.join(image_dir, attack_path)
+            if not os.path.exists(tensor_path):
+                print(f"    Attack file not found: {tensor_path}, skipping")
+                continue
+                
+            # Load the tensor
+            try:
+                tensor_image = load_image_tensor(tensor_path)
+            except Exception as e:
+                print(f"    Error loading tensor: {e}, skipping")
+                continue
+                
+            # Run inference with each model
+            for model_id in models:
+                model_name = model_id.split('/')[-1]
+                print(f"    Using model: {model_name}")
+                
+                # Check if we should skip this model due to existing output
+                if not replace_existing and model_id in attack_info.get("model_outputs", {}):
+                    print(f"      Skipping - Output already exists and replace_existing=False")
+                    continue
+                    
+                try:
+                    # Run inference
+                    result = run_inference(model_id, prompt, tensor_image)
+                    print(f"      Output: {result}")
+                    
+                    # Create timestamp for tracking when inference was run
+                    timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
+                    
+                    # Update the model outputs for this attack
+                    if "model_outputs" not in attack_info:
+                        attack_info["model_outputs"] = {}
+                        
+                    # Add or update the model result
+                    attack_info["model_outputs"][model_id] = {
+                        "output": result,
+                        "timestamp": timestamp
+                    }
+                    
+                except Exception as e:
+                    print(f"      ERROR with model {model_name}: {str(e)}")
+    
+    # Write updated data back to file
+    try:
+        with open(json_path, 'w') as file:
+            json.dump(image_data, file, indent=2)
+        print(f"\nUpdated {json_path} with attack evaluation results")
+    except Exception as e:
+        print(f"Error writing to JSON file: {e}")
+    
+    print("\nAll evaluations completed!")
+
+
 if __name__ == "__main__":
     # Setup environment and authentication
     load_dotenv()
     login(os.environ['HF_KEY'])
     
-    # Example of running the clean image evaluation
-    evaluate_clean_images([
-        Models.PALIGEMMA2_3B
+    # Example of evaluating attack images with multiple models
+    evaluate_attack_images([
+        Models.PALIGEMMA2_10B
     ])
+
+    # Alternatively, run the clean image evaluation
+    # evaluate_clean_images([Models.PALIGEMMA2_3B])
