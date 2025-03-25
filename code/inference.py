@@ -127,7 +127,7 @@ class ModelManager:
             # Llama models use AutoProcessor and don't need a separate tokenizer
             processor = AutoProcessor.from_pretrained(model_id, cache_dir=self.cache_dir)
             # Reuse processor as tokenizer - it contains the tokenizer functionality
-            tokenizer = processor
+            tokenizer = processor.tokenizer
         elif "llava" in model_id.lower():
             # Special handling for LLaVA models
             model = LlavaForConditionalGeneration.from_pretrained(
@@ -296,32 +296,78 @@ def run_inference_llama(
     """Run inference with a Llama-3.2-Vision model."""
     model, tokenizer, processor = model_manager.get_model(model_id)
     
-    # Process input differently based on type
-    image, is_tensor, tensor_image = process_image_input(image_input, processor, model.device)
-    
-    # Always process with PIL image to get proper structure
-    messages = [
-        {"role": "user", "content": [
-            {"type": "image", "image": image},
-            {"type": "text", "text": prompt}
-        ]}
-    ]
-    
-    # Process inputs
-    input_text = processor.apply_chat_template(messages, add_generation_prompt=True)
-    inputs = processor(
-        image,
-        input_text,
-        add_special_tokens=False,
-        return_tensors="pt"
-    )
-    
-    # If original input was tensor, substitute the exact tensor values
-    if is_tensor:
-        inputs['pixel_values'] = tensor_image
-    
-    # Move to device
-    inputs = {k: v.to(model.device) for k, v in inputs.items()}
+    # Check if input is already a tensor (from an attack)
+    if isinstance(image_input, torch.Tensor):
+        # Print incoming tensor shape for debugging
+        print(f"Input tensor shape: {image_input.shape}")
+        
+        # Get the tensor shape
+        tensor_shape = image_input.shape
+        
+        # For Llama models - we need to reshape tensor to expected format
+        # Process with a dummy PIL image to get the correct structure
+        dummy_image = Image.new('RGB', (224, 224), color='white')
+        messages = [
+            {"role": "user", "content": [
+                {"type": "image", "image": dummy_image},
+                {"type": "text", "text": prompt}
+            ]}
+        ]
+        
+        # Process inputs to get the template structure
+        input_text = processor.apply_chat_template(messages, add_generation_prompt=True)
+        inputs = processor(
+            dummy_image,
+            input_text,
+            add_special_tokens=False,
+            return_tensors="pt"
+        ).to(model.device)
+        
+        # Get the expected shape from the processor's output
+        expected_shape = inputs['pixel_values'].shape
+        print(f"Expected tensor shape: {expected_shape}")
+        
+        # If the input tensor is 4D [1, 3, H, W] and we need 6D [1, 1, 4, 3, H, W]
+        if len(tensor_shape) == 4 and len(expected_shape) == 6:
+            # Create a tensor of the right shape
+            # First, move to the right device
+            image_input = image_input.to(model.device)
+            
+            # Create a new tensor of the expected shape
+            new_tensor = torch.zeros(expected_shape, device=model.device)
+            
+            # Place the input tensor in the first position
+            # For Llama 3.2 Vision: expected_shape is [1, 1, 4, 3, H, W]
+            # Copy our tensor into all 4 positions
+            for i in range(expected_shape[2]):
+                new_tensor[0, 0, i] = image_input[0]
+            
+            # Replace the pixel_values with our properly structured tensor
+            inputs['pixel_values'] = new_tensor
+            print(f"Restructured tensor shape: {inputs['pixel_values'].shape}")
+        else:
+            # Direct replacement if shapes already match
+            inputs['pixel_values'] = image_input.to(model.device)
+    else:
+        # For non-tensor inputs (PIL or path), process normally
+        image = load_image(image_input)
+        
+        # Format as chat message
+        messages = [
+            {"role": "user", "content": [
+                {"type": "image", "image": image},
+                {"type": "text", "text": prompt}
+            ]}
+        ]
+        
+        # Process inputs
+        input_text = processor.apply_chat_template(messages, add_generation_prompt=True)
+        inputs = processor(
+            image,
+            input_text,
+            add_special_tokens=False,
+            return_tensors="pt"
+        ).to(model.device)
     
     # Generate response
     with torch.inference_mode():

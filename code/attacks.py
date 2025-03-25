@@ -341,8 +341,9 @@ class BasePGDAttack:
 
         # Save the tensor version before any transformations
         tensor_image = processed_image.clone()
+
+        # print("shape:", tensor_image.shape) torch.Size([1, 3, 224, 224])
         
-        # Return both formats
         return tensor_image
 
 
@@ -481,15 +482,6 @@ class LlamaAttack(BasePGDAttack):
         
         return inputs
     
-    def generate_from_inputs(self, inputs, max_new_tokens=10):
-        """Generate text from processed inputs for Llama models"""
-        with torch.inference_mode():
-            output_ids = self.model.generate(**inputs, max_new_tokens=max_new_tokens)
-            generated_text = self.processor.decode(output_ids[0], skip_special_tokens=True)
-            
-            # For attack verification, we don't need to remove the prompt part
-            return generated_text
-    
     def update_working_inputs(self, working_inputs, target_id):
         """Update inputs for next token prediction for Llama models"""
         # Add the target token to the input sequence
@@ -504,6 +496,206 @@ class LlamaAttack(BasePGDAttack):
                     torch.ones((1, 1), device=working_inputs['attention_mask'].device)], 
                     dim=1
                 )
+
+    def pgd_attack(self, prompt, image_path, target_sequence):
+        """
+        PGD attack for Llama 3.2 Vision models that handles the unique multi-crop tensor structure
+        
+        Args:
+            prompt: Text prompt to use with the image
+            image_path: Path to the input image
+            target_sequence: Target text sequence to generate
+        
+        Returns:
+            PyTorch tensor containing the optimized image with shape [1, 3, H, W]
+        """
+        # Process the image and text prompt
+        image = Image.open(image_path).convert("RGB")
+        original_size = image.size  # Save original size for reference
+        print(f"Original image size: {original_size}")
+        
+        # Get model inputs which will have the complex tensor structure
+        model_inputs = self.process_inputs(prompt, image)
+        
+        if 'pixel_values' not in model_inputs:
+            raise ValueError(f"Llama inputs must contain 'pixel_values', found keys: {list(model_inputs.keys())}")
+        
+        # Analyze the tensor structure
+        pixel_shape = model_inputs['pixel_values'].shape
+        print(f"Model's pixel_values shape: {pixel_shape}")
+        
+        # For reference, expected shape is [1, 1, 4, 3, 560, 560]
+        # batch, extra_dim, num_crops, channels, height, width
+        
+        # Create a smaller working tensor with just the first crop for gradient tracking
+        # Extract the first crop (index 0)
+        if len(pixel_shape) >= 4 and pixel_shape[2] > 1:
+            # Structure is [1, 1, 4, 3, H, W] - extract first crop
+            base_image = model_inputs['pixel_values'][:, :, 0].clone().detach().requires_grad_(True)
+            print(f"Working with first crop, shape: {base_image.shape}")
+        else:
+            # Fallback if structure is different
+            base_image = model_inputs['pixel_values'].clone().detach().requires_grad_(True)
+        
+        # Save original for epsilon constraint
+        original_base_image = base_image.clone()
+        
+        # Convert target sequence to token IDs
+        target_token_ids = self.tokenizer.encode(target_sequence, add_special_tokens=False)
+        print(f"Target tokens: {[self.tokenizer.decode([tid]) for tid in target_token_ids]}")
+        
+        # Initialize momentum for more stable gradients
+        momentum = torch.zeros_like(base_image)
+        
+        # Initialize noise and tracking variables
+        noise_std = 0.01
+        best_image = None
+        best_prob = 0.0
+        
+        # Print scheduler information
+        print(f"Using {self.scheduler_type} alpha scheduler with warmup ratio {self.warmup_ratio}")
+        print(f"Alpha range: {self.alpha_min:.6f} to {self.alpha_max:.6f}")
+        
+        for i in range(self.num_iter):
+            # Calculate current alpha based on schedule
+            current_alpha = self.get_alpha_for_iteration(i)
+            print(f"=== Iteration {i+1}/{self.num_iter} (alpha={current_alpha:.6f}) ===")
+            
+            # Add random noise for robustness
+            with torch.no_grad():
+                noise = torch.randn_like(base_image) * noise_std
+                noisy_image = base_image.clone() + noise
+                noisy_image = torch.clamp(noisy_image, 0, 1)
+            
+            # Apply the modified first crop to the full tensor structure
+            full_noisy_tensor = model_inputs['pixel_values'].clone()
+            
+            # Replace first crop with noisy image that has gradients
+            noisy_image = noisy_image.requires_grad_(True)
+            
+            # Create new set of inputs with our modified tensor
+            noisy_inputs = {k: v.clone() for k, v in model_inputs.items()}
+            
+            # For multi-crop models (Llama 3.2 Vision):
+            # We need to place our modified first crop back into the full structure
+            if len(pixel_shape) >= 4 and pixel_shape[2] > 1:
+                # Create a new tensor with same shape as original
+                modified_pixel_values = full_noisy_tensor.clone()
+                
+                # Place the noisy image (with gradients) as the first crop
+                modified_pixel_values[:, :, 0] = noisy_image
+                
+                # Now all 4 crops have the same base image but only first has gradients
+                noisy_inputs['pixel_values'] = modified_pixel_values
+            else:
+                # Simpler case - direct replacement
+                noisy_inputs['pixel_values'] = noisy_image
+            
+            # Reset gradients and prepare for loss accumulation
+            self.model.zero_grad()
+            total_loss = 0
+            
+            # Create a working copy of inputs for token prediction
+            working_inputs = {k: v.clone() for k, v in noisy_inputs.items()}
+            
+            # Number of tokens to optimize (limited by target sequence length)
+            n_tokens = min(self.token_lookahead, len(target_token_ids))
+            
+            # For each token position in the sequence (up to lookahead)
+            for j in range(n_tokens):
+                # Get target token for this position
+                target_id = target_token_ids[j]
+                
+                # Forward pass using standard model call instead of generate
+                outputs = self.model(**working_inputs)
+                
+                # Get logits for the last position
+                position_logits = outputs.logits[0, -1]
+                
+                # Calculate loss for this token
+                log_probs = torch.log_softmax(position_logits, dim=-1)
+                token_loss = -log_probs[target_id]
+                
+                # Apply position weighting 
+                position_weight = max(float(self.token_lookahead - j), 0.5)
+                
+                # Add weighted loss to total
+                weighted_loss = token_loss * position_weight
+                total_loss = total_loss + weighted_loss
+                
+                # Print probabilities for monitoring
+                probs = torch.softmax(position_logits, dim=-1)
+                print(f"  Position {j}: Target '{self.tokenizer.decode([target_id])}' prob: {probs[target_id].item():.4f}")
+                top_token_id = torch.argmax(position_logits).item()
+                print(f"    Top predicted: '{self.tokenizer.decode([top_token_id])}' prob: {probs[top_token_id].item():.4f}")
+                
+                # Update working inputs for next token prediction if needed
+                if j < n_tokens - 1:
+                    self.update_working_inputs(working_inputs, target_id)
+            
+            # Backpropagate the total loss
+            total_loss.backward()
+            
+            # Track best result so far
+            first_token_prob = probs[target_token_ids[0]].item()
+            if first_token_prob > best_prob:
+                best_prob = first_token_prob
+                if len(pixel_shape) >= 4 and pixel_shape[2] > 1:
+                    # Save just the first crop
+                    best_image = base_image.clone()
+                else:
+                    best_image = base_image.clone()
+            
+            # Apply gradients if available
+            if noisy_image.grad is not None:
+                # Update momentum
+                momentum = 0.9 * momentum - current_alpha * torch.sign(noisy_image.grad)
+                
+                # Apply momentum update to base image
+                base_image = base_image + momentum
+                
+                # Project back to epsilon ball
+                perturbation = torch.clamp(base_image - original_base_image, -self.epsilon, self.epsilon)
+                base_image = original_base_image + perturbation
+                
+                # Ensure values are valid
+                with torch.no_grad():
+                    base_image = torch.clamp(base_image, 0, 1)
+                    
+                    # Update all crops in the full tensor with the modified base image
+                    if len(pixel_shape) >= 4 and pixel_shape[2] > 1:
+                        full_tensor = model_inputs['pixel_values'].clone()
+                        # Apply the same perturbation to all crops
+                        for crop_idx in range(pixel_shape[2]):
+                            full_tensor[:, :, crop_idx] = base_image.clone()
+                        model_inputs['pixel_values'] = full_tensor
+                    else:
+                        model_inputs['pixel_values'] = base_image.clone()
+                    
+                    # Reduce noise over time
+                    noise_std = max(0.001, noise_std * 0.98)
+                    
+                    # Prepare for next iteration
+                    base_image = base_image.detach().requires_grad_(True)
+            else:
+                print("Warning: No gradient calculated.")
+            
+            print()
+        
+        # Use the best image found during optimization
+        if best_prob > 0.0:
+            print(f"\nUsing best image with probability {best_prob:.4f}")
+            base_image = best_image
+        
+        # Create the final tensor with shape [1, 3, H, W]
+        if len(base_image.shape) > 4:
+            final_image = base_image.squeeze(1)  # Remove extra dimensions
+        else:
+            final_image = base_image
+            
+        print(f"Final output tensor shape: {final_image.shape}")
+        
+        return final_image
 
 
 @AttackRegistry.register("llava")
@@ -683,9 +875,6 @@ class LlavaAttack(BasePGDAttack):
                 
                 # Apply momentum update
                 processed_image = processed_image + momentum
-                # Print the shape and some values of the processed image
-                print(f"Processed image shape: {processed_image.shape}")
-                print(f"Processed image values (sample): {processed_image.flatten()[:10].tolist()}")
                 
                 # Project back to epsilon ball
                 perturbation = torch.clamp(processed_image - original_image, -self.epsilon, self.epsilon)

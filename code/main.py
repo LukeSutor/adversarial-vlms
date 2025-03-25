@@ -359,11 +359,13 @@ if __name__ == "__main__":
     # Setup environment and authentication
     load_dotenv()
     login(os.environ['HF_KEY'])
+
+    attack("/blue/rcstudents/luke.sutor/adversarial-vlms/images/clean/boiling.png", Models.LLAMA_3_2_11B_VISION, "A", "Answer the question")
     
     # Example of evaluating attack images with multiple models
-    evaluate_attack_images([
-        Models.PALIGEMMA2_10B
-    ])
+    # evaluate_attack_images([
+    #     Models.PALIGEMMA2_10B
+    # ])
 
     # Alternatively, run the clean image evaluation
     # evaluate_clean_images([Models.PALIGEMMA2_3B])

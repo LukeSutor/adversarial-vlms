@@ -33,11 +33,31 @@
           "model_outputs": {
             "google/paligemma2-3b-mix-224": {
               "output": "A. 50",
-              "timestamp": "2025-03-23 20:07:55"
+              "timestamp": "2025-03-25 16:06:53"
             },
             "google/paligemma2-10b-mix-224": {
               "output": "c",
               "timestamp": "2025-03-23 20:32:46"
+            }
+          }
+        },
+        "Llama-3.2-11B-Vision-Instruct": {
+          "metadata": {
+            "model_used": "meta-llama/Llama-3.2-11B-Vision-Instruct",
+            "path": "attack/Llama-3.2-11B-Vision-Instruct/boiling.pt",
+            "attack_parameters": {
+              "epsilon": 0.1,
+              "alpha": 0.01,
+              "iterations": 200,
+              "scheduler": "cosine",
+              "warmup_ratio": 0.2
+            },
+            "generation_date": "2025-03-25 16:42:24"
+          },
+          "model_outputs": {
+            "meta-llama/Llama-3.2-11B-Vision-Instruct": {
+              "output": "assistant\n\nA 50 A 50 A 73 A 50 A 73 A 50 A 50 A 73 A 50 A 50 A 73 A 50 A 50 A 73 A 50 A 50 A 73 A 50 A 50 A 73 A 50 A 50 A 73 A 50 A 50 A 73 A 50 A 50 A 73 A 50 A 50 A 73 A 50 A",
+              "timestamp": "2025-03-25 16:42:24"
             }
           }
         }
