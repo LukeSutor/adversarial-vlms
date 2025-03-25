@@ -296,7 +296,7 @@ def evaluate_attack_images(models, prompt="Answer the question.", replace_existi
             print(f"\n  [{processed_count}/{attack_count}] Evaluating {attack_model_name} attack")
             
             # Get the path to the attack tensor
-            attack_path = attack_info.get("metadata", {}).get("path")
+            attack_path = attack_info.get("metadata", {}).get("path").lower()
             if not attack_path:
                 print(f"    Missing path for {attack_model_name} attack, skipping")
                 continue
@@ -360,12 +360,10 @@ if __name__ == "__main__":
     load_dotenv()
     login(os.environ['HF_KEY'])
 
-    attack("/blue/rcstudents/luke.sutor/adversarial-vlms/images/clean/boiling.png", Models.LLAMA_3_2_11B_VISION, "A", "Answer the question")
+    # attack("/blue/rcstudents/luke.sutor/adversarial-vlms/images/clean/boiling.png", Models.LLAMA_3_2_11B_VISION, "A", "Answer the question")
     
     # Example of evaluating attack images with multiple models
-    # evaluate_attack_images([
-    #     Models.PALIGEMMA2_10B
-    # ])
+    evaluate_attack_images([Models.PALIGEMMA2_3B])
 
     # Alternatively, run the clean image evaluation
     # evaluate_clean_images([Models.PALIGEMMA2_3B])

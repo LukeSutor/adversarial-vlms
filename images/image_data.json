@@ -32,8 +32,8 @@
           },
           "model_outputs": {
             "google/paligemma2-3b-mix-224": {
-              "output": "A. 50",
-              "timestamp": "2025-03-25 16:06:53"
+              "output": "A. 24.75",
+              "timestamp": "2025-03-25 18:55:59"
             },
             "google/paligemma2-10b-mix-224": {
               "output": "c",
@@ -56,8 +56,8 @@
           },
           "model_outputs": {
             "meta-llama/Llama-3.2-11B-Vision-Instruct": {
-              "output": "assistant\n\nA 50 A 50 A 73 A 50 A 73 A 50 A 50 A 73 A 50 A 50 A 73 A 50 A 50 A 73 A 50 A 50 A 73 A 50 A 50 A 73 A 50 A 50 A 73 A 50 A 50 A 73 A 50 A 50 A 73 A 50 A 50 A 73 A 50 A",
-              "timestamp": "2025-03-25 16:42:24"
+              "output": "assistant\n\nA: 50 A: 50 A: 73 A: 50 A: 73 A: 50 A: 150 A: 150 A: 150 A: 150 A: 150 A: 150 A: 150 A: 150 A: 150 A: 150 A: 150 A: 150 A: 150 A: 150 A: 150 A: 150 A: 150 A: 150 A: 150",
+              "timestamp": "2025-03-25 17:04:52"
             }
           }
         }
@@ -96,11 +96,31 @@
           "model_outputs": {
             "google/paligemma2-3b-mix-224": {
               "output": "D. Gainesville",
-              "timestamp": "2025-03-23 20:08:33"
+              "timestamp": "2025-03-25 18:56:41"
             },
             "google/paligemma2-10b-mix-224": {
               "output": "b",
               "timestamp": "2025-03-23 20:32:52"
+            }
+          }
+        },
+        "Llama-3.2-11B-Vision-Instruct": {
+          "metadata": {
+            "model_used": "meta-llama/Llama-3.2-11B-Vision-Instruct",
+            "path": "attack/Llama-3.2-11B-Vision-Instruct/capital.pt",
+            "attack_parameters": {
+              "epsilon": 0.1,
+              "alpha": 0.01,
+              "iterations": 200,
+              "scheduler": "cosine",
+              "warmup_ratio": 0.2
+            },
+            "generation_date": "2025-03-25 17:08:16"
+          },
+          "model_outputs": {
+            "meta-llama/Llama-3.2-11B-Vision-Instruct": {
+              "output": "assistant\n\nD. 5. D. 6. D. 6. 6. 5. 6. 6. 6. 6. 6. 6. 6. 6. 6. 6. 6. 6. 6. 6. 6. 6. 6. 6. 6. 6. 6. 6. 6. 6. 6. 6.",
+              "timestamp": "2025-03-25 17:08:16"
             }
           }
         }
@@ -122,7 +142,48 @@
           }
         }
       },
-      "attacks": {}
+      "attacks": {
+        "Llama-3.2-11B-Vision-Instruct": {
+          "metadata": {
+            "model_used": "meta-llama/Llama-3.2-11B-Vision-Instruct",
+            "path": "attack/Llama-3.2-11B-Vision-Instruct/cow.pt",
+            "attack_parameters": {
+              "epsilon": 0.1,
+              "alpha": 0.01,
+              "iterations": 200,
+              "scheduler": "cosine",
+              "warmup_ratio": 0.2
+            },
+            "generation_date": "2025-03-25 17:11:38"
+          },
+          "model_outputs": {
+            "meta-llama/Llama-3.2-11B-Vision-Instruct": {
+              "output": "assistant\n\nD. D. D. D. D. D. D. D. D. D. D. D. D. D. D. D. D. D. D. D. D. D. D. D. D. D. D. D. D. D. D. D. D. D. D. D. D. D. D. D. D. D. D. D. D. D. D. D. D. D.",
+              "timestamp": "2025-03-25 17:11:38"
+            }
+          }
+        },
+        "paligemma2-3b-mix-224": {
+          "metadata": {
+            "model_used": "google/paligemma2-3b-mix-224",
+            "path": "attack/paligemma2-3b-mix-224/cow.pt",
+            "attack_parameters": {
+              "epsilon": 0.1,
+              "alpha": 0.01,
+              "iterations": 200,
+              "scheduler": "cosine",
+              "warmup_ratio": 0.2
+            },
+            "generation_date": "2025-03-25 18:57:19"
+          },
+          "model_outputs": {
+            "google/paligemma2-3b-mix-224": {
+              "output": "D. Chicken!",
+              "timestamp": "2025-03-25 18:57:19"
+            }
+          }
+        }
+      }
     },
     "friend": {
       "metadata": {
@@ -140,7 +201,48 @@
           }
         }
       },
-      "attacks": {}
+      "attacks": {
+        "Llama-3.2-11B-Vision-Instruct": {
+          "metadata": {
+            "model_used": "meta-llama/Llama-3.2-11B-Vision-Instruct",
+            "path": "attack/Llama-3.2-11B-Vision-Instruct/friend.pt",
+            "attack_parameters": {
+              "epsilon": 0.1,
+              "alpha": 0.01,
+              "iterations": 200,
+              "scheduler": "cosine",
+              "warmup_ratio": 0.2
+            },
+            "generation_date": "2025-03-25 17:15:01"
+          },
+          "model_outputs": {
+            "meta-llama/Llama-3.2-11B-Vision-Instruct": {
+              "output": "assistant\n\nWhat animal is known as man's best friend? 3. 2. 1. 1. 2. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1.",
+              "timestamp": "2025-03-25 17:15:01"
+            }
+          }
+        },
+        "paligemma2-3b-mix-224": {
+          "metadata": {
+            "model_used": "google/paligemma2-3b-mix-224",
+            "path": "attack/paligemma2-3b-mix-224/friend.pt",
+            "attack_parameters": {
+              "epsilon": 0.1,
+              "alpha": 0.01,
+              "iterations": 200,
+              "scheduler": "cosine",
+              "warmup_ratio": 0.2
+            },
+            "generation_date": "2025-03-25 18:57:57"
+          },
+          "model_outputs": {
+            "google/paligemma2-3b-mix-224": {
+              "output": "cat",
+              "timestamp": "2025-03-25 18:57:57"
+            }
+          }
+        }
+      }
     },
     "fruit": {
       "metadata": {
@@ -158,7 +260,48 @@
           }
         }
       },
-      "attacks": {}
+      "attacks": {
+        "Llama-3.2-11B-Vision-Instruct": {
+          "metadata": {
+            "model_used": "meta-llama/Llama-3.2-11B-Vision-Instruct",
+            "path": "attack/Llama-3.2-11B-Vision-Instruct/fruit.pt",
+            "attack_parameters": {
+              "epsilon": 0.1,
+              "alpha": 0.01,
+              "iterations": 200,
+              "scheduler": "cosine",
+              "warmup_ratio": 0.2
+            },
+            "generation_date": "2025-03-25 17:18:25"
+          },
+          "model_outputs": {
+            "meta-llama/Llama-3.2-11B-Vision-Instruct": {
+              "output": "assistant\n\nA. Apple A. Apple. A. Apple. A. Apple. A. Apple. A. Apple. A. Apple. A. Apple. A. Apple. A. Apple. A. Apple. A. Apple. A. Apple. A. Apple. A. Apple. A. Apple. A. Apple. A. Apple. A. Apple. A. Apple. A. Apple. A. Apple. A. Apple. A. Apple. A. Apple. A",
+              "timestamp": "2025-03-25 17:18:25"
+            }
+          }
+        },
+        "paligemma2-3b-mix-224": {
+          "metadata": {
+            "model_used": "google/paligemma2-3b-mix-224",
+            "path": "attack/paligemma2-3b-mix-224/fruit.pt",
+            "attack_parameters": {
+              "epsilon": 0.1,
+              "alpha": 0.01,
+              "iterations": 200,
+              "scheduler": "cosine",
+              "warmup_ratio": 0.2
+            },
+            "generation_date": "2025-03-25 18:58:35"
+          },
+          "model_outputs": {
+            "google/paligemma2-3b-mix-224": {
+              "output": "A. apple",
+              "timestamp": "2025-03-25 18:58:35"
+            }
+          }
+        }
+      }
     },
     "hot": {
       "metadata": {
@@ -176,7 +319,48 @@
           }
         }
       },
-      "attacks": {}
+      "attacks": {
+        "Llama-3.2-11B-Vision-Instruct": {
+          "metadata": {
+            "model_used": "meta-llama/Llama-3.2-11B-Vision-Instruct",
+            "path": "attack/Llama-3.2-11B-Vision-Instruct/hot.pt",
+            "attack_parameters": {
+              "epsilon": 0.1,
+              "alpha": 0.01,
+              "iterations": 200,
+              "scheduler": "cosine",
+              "warmup_ratio": 0.2
+            },
+            "generation_date": "2025-03-25 17:21:48"
+          },
+          "model_outputs": {
+            "meta-llama/Llama-3.2-11B-Vision-Instruct": {
+              "output": "assistant\n\nWhat is the the Whenthe 8. 1 What the 8. 1 What the 8. 1 What the 8. 1 What the 8. 1 What the 8. 1 What the 8. 1 What the 8. 1 What the 8. 1 What the 8. 1 What the 8. 1 What the 8. 1 What the 8. 1 What the 8",
+              "timestamp": "2025-03-25 17:21:48"
+            }
+          }
+        },
+        "paligemma2-3b-mix-224": {
+          "metadata": {
+            "model_used": "google/paligemma2-3b-mix-224",
+            "path": "attack/paligemma2-3b-mix-224/hot.pt",
+            "attack_parameters": {
+              "epsilon": 0.1,
+              "alpha": 0.01,
+              "iterations": 200,
+              "scheduler": "cosine",
+              "warmup_ratio": 0.2
+            },
+            "generation_date": "2025-03-25 18:59:12"
+          },
+          "model_outputs": {
+            "google/paligemma2-3b-mix-224": {
+              "output": "red.k",
+              "timestamp": "2025-03-25 18:59:12"
+            }
+          }
+        }
+      }
     },
     "math": {
       "metadata": {
@@ -194,7 +378,48 @@
           }
         }
       },
-      "attacks": {}
+      "attacks": {
+        "Llama-3.2-11B-Vision-Instruct": {
+          "metadata": {
+            "model_used": "meta-llama/Llama-3.2-11B-Vision-Instruct",
+            "path": "attack/Llama-3.2-11B-Vision-Instruct/math.pt",
+            "attack_parameters": {
+              "epsilon": 0.1,
+              "alpha": 0.01,
+              "iterations": 200,
+              "scheduler": "cosine",
+              "warmup_ratio": 0.2
+            },
+            "generation_date": "2025-03-25 17:25:07"
+          },
+          "model_outputs": {
+            "meta-llama/Llama-3.2-11B-Vision-Instruct": {
+              "output": "assistant\n\n2 What 2 What 3 What 3 What 3 What 3 What 3 What 3 What 3 What 3 What 3 What 3 What 3 What 3 What 3 What 3 What 3 What 3 What 3 What 3 What 3 What 3 What 3 What 3 What 3 What 3 What 3 What 3 What 3 What 3 What 3 What 3 What 3 What 3",
+              "timestamp": "2025-03-25 17:25:07"
+            }
+          }
+        },
+        "paligemma2-3b-mix-224": {
+          "metadata": {
+            "model_used": "google/paligemma2-3b-mix-224",
+            "path": "attack/paligemma2-3b-mix-224/math.pt",
+            "attack_parameters": {
+              "epsilon": 0.1,
+              "alpha": 0.01,
+              "iterations": 200,
+              "scheduler": "cosine",
+              "warmup_ratio": 0.2
+            },
+            "generation_date": "2025-03-25 18:59:50"
+          },
+          "model_outputs": {
+            "google/paligemma2-3b-mix-224": {
+              "output": "3",
+              "timestamp": "2025-03-25 18:59:50"
+            }
+          }
+        }
+      }
     },
     "month": {
       "metadata": {
@@ -212,7 +437,48 @@
           }
         }
       },
-      "attacks": {}
+      "attacks": {
+        "Llama-3.2-11B-Vision-Instruct": {
+          "metadata": {
+            "model_used": "meta-llama/Llama-3.2-11B-Vision-Instruct",
+            "path": "attack/Llama-3.2-11B-Vision-Instruct/month.pt",
+            "attack_parameters": {
+              "epsilon": 0.1,
+              "alpha": 0.01,
+              "iterations": 200,
+              "scheduler": "cosine",
+              "warmup_ratio": 0.2
+            },
+            "generation_date": "2025-03-25 17:28:27"
+          },
+          "model_outputs": {
+            "meta-llama/Llama-3.2-11B-Vision-Instruct": {
+              "output": "assistant\n\nB. APRIL. D. JANUARY. D. JANUARY. D. J. D. J. D. J. J. J. J. J. J. J. J. J. J. J. J. J. J. J. J. J. J. J. J. J. J. J. J. J. J. J. J. J. J. J. J. J. J. J. J. J",
+              "timestamp": "2025-03-25 17:28:27"
+            }
+          }
+        },
+        "paligemma2-3b-mix-224": {
+          "metadata": {
+            "model_used": "google/paligemma2-3b-mix-224",
+            "path": "attack/paligemma2-3b-mix-224/month.pt",
+            "attack_parameters": {
+              "epsilon": 0.1,
+              "alpha": 0.01,
+              "iterations": 200,
+              "scheduler": "cosine",
+              "warmup_ratio": 0.2
+            },
+            "generation_date": "2025-03-25 19:00:28"
+          },
+          "model_outputs": {
+            "google/paligemma2-3b-mix-224": {
+              "output": "B: April",
+              "timestamp": "2025-03-25 19:00:28"
+            }
+          }
+        }
+      }
     },
     "planet": {
       "metadata": {
@@ -230,7 +496,48 @@
           }
         }
       },
-      "attacks": {}
+      "attacks": {
+        "Llama-3.2-11B-Vision-Instruct": {
+          "metadata": {
+            "model_used": "meta-llama/Llama-3.2-11B-Vision-Instruct",
+            "path": "attack/Llama-3.2-11B-Vision-Instruct/planet.pt",
+            "attack_parameters": {
+              "epsilon": 0.1,
+              "alpha": 0.01,
+              "iterations": 200,
+              "scheduler": "cosine",
+              "warmup_ratio": 0.2
+            },
+            "generation_date": "2025-03-25 17:31:46"
+          },
+          "model_outputs": {
+            "meta-llama/Llama-3.2-11B-Vision-Instruct": {
+              "output": "assistant\n\nA Earth A Earth A Earth A Earth A Earth A Earth A Earth A Earth A Earth A Earth A Earth A Earth A Earth A Earth A Earth A Earth A Earth A Earth A Earth A Earth A Earth A Earth A Earth A Earth A Earth A Earth A Earth A Earth A Earth A Earth A Earth A Earth A Earth A Earth A Earth A Earth A Earth A Earth A Earth A Earth A Earth A Earth A Earth A Earth A Earth A Earth A Earth A Earth A Earth A Earth",
+              "timestamp": "2025-03-25 17:31:46"
+            }
+          }
+        },
+        "paligemma2-3b-mix-224": {
+          "metadata": {
+            "model_used": "google/paligemma2-3b-mix-224",
+            "path": "attack/paligemma2-3b-mix-224/planet.pt",
+            "attack_parameters": {
+              "epsilon": 0.1,
+              "alpha": 0.01,
+              "iterations": 200,
+              "scheduler": "cosine",
+              "warmup_ratio": 0.2
+            },
+            "generation_date": "2025-03-25 19:01:06"
+          },
+          "model_outputs": {
+            "google/paligemma2-3b-mix-224": {
+              "output": "A",
+              "timestamp": "2025-03-25 19:01:06"
+            }
+          }
+        }
+      }
     },
     "round": {
       "metadata": {
@@ -248,7 +555,48 @@
           }
         }
       },
-      "attacks": {}
+      "attacks": {
+        "Llama-3.2-11B-Vision-Instruct": {
+          "metadata": {
+            "model_used": "meta-llama/Llama-3.2-11B-Vision-Instruct",
+            "path": "attack/Llama-3.2-11B-Vision-Instruct/round.pt",
+            "attack_parameters": {
+              "epsilon": 0.1,
+              "alpha": 0.01,
+              "iterations": 200,
+              "scheduler": "cosine",
+              "warmup_ratio": 0.2
+            },
+            "generation_date": "2025-03-25 17:35:07"
+          },
+          "model_outputs": {
+            "meta-llama/Llama-3.2-11B-Vision-Instruct": {
+              "output": "assistant\n\nCatie. C. W. C. C. C. C. C. C. C. C. C. I. I. I. I. I. I. I. I. I. I. I. I. I. I. I. I. I. I. I. I. I. I. I. I. I. I. I. I. I. I. I. I. I. I. I. I. I. I",
+              "timestamp": "2025-03-25 17:35:07"
+            }
+          }
+        },
+        "paligemma2-3b-mix-224": {
+          "metadata": {
+            "model_used": "google/paligemma2-3b-mix-224",
+            "path": "attack/paligemma2-3b-mix-224/round.pt",
+            "attack_parameters": {
+              "epsilon": 0.1,
+              "alpha": 0.01,
+              "iterations": 200,
+              "scheduler": "cosine",
+              "warmup_ratio": 0.2
+            },
+            "generation_date": "2025-03-25 19:01:44"
+          },
+          "model_outputs": {
+            "google/paligemma2-3b-mix-224": {
+              "output": "C. Triangle",
+              "timestamp": "2025-03-25 19:01:44"
+            }
+          }
+        }
+      }
     },
     "sky": {
       "metadata": {
@@ -266,7 +614,48 @@
           }
         }
       },
-      "attacks": {}
+      "attacks": {
+        "Llama-3.2-11B-Vision-Instruct": {
+          "metadata": {
+            "model_used": "meta-llama/Llama-3.2-11B-Vision-Instruct",
+            "path": "attack/Llama-3.2-11B-Vision-Instruct/sky.pt",
+            "attack_parameters": {
+              "epsilon": 0.1,
+              "alpha": 0.01,
+              "iterations": 200,
+              "scheduler": "cosine",
+              "warmup_ratio": 0.2
+            },
+            "generation_date": "2025-03-25 17:38:29"
+          },
+          "model_outputs": {
+            "meta-llama/Llama-3.2-11B-Vision-Instruct": {
+              "output": "assistant\n\nD. D. D. D. D. D. D. D. D. D. D. D. D. D. D. D. D. D. D. D. D. D. D. D. D. D. D. D. D. D. D. D. D. D. D. D. D. D. D. D. D. D. D. D. D. D. D. D. D. D.",
+              "timestamp": "2025-03-25 17:38:29"
+            }
+          }
+        },
+        "paligemma2-3b-mix-224": {
+          "metadata": {
+            "model_used": "google/paligemma2-3b-mix-224",
+            "path": "attack/paligemma2-3b-mix-224/sky.pt",
+            "attack_parameters": {
+              "epsilon": 0.1,
+              "alpha": 0.01,
+              "iterations": 200,
+              "scheduler": "cosine",
+              "warmup_ratio": 0.2
+            },
+            "generation_date": "2025-03-25 19:02:22"
+          },
+          "model_outputs": {
+            "google/paligemma2-3b-mix-224": {
+              "output": "D. Yellow",
+              "timestamp": "2025-03-25 19:02:22"
+            }
+          }
+        }
+      }
     },
     "triangle": {
       "metadata": {
@@ -284,7 +673,48 @@
           }
         }
       },
-      "attacks": {}
+      "attacks": {
+        "Llama-3.2-11B-Vision-Instruct": {
+          "metadata": {
+            "model_used": "meta-llama/Llama-3.2-11B-Vision-Instruct",
+            "path": "attack/Llama-3.2-11B-Vision-Instruct/triangle.pt",
+            "attack_parameters": {
+              "epsilon": 0.1,
+              "alpha": 0.01,
+              "iterations": 200,
+              "scheduler": "cosine",
+              "warmup_ratio": 0.2
+            },
+            "generation_date": "2025-03-25 17:41:48"
+          },
+          "model_outputs": {
+            "meta-llama/Llama-3.2-11B-Vision-Instruct": {
+              "output": "assistant\n\n1 I I: 1 I: 1 I: 1 I: 1 I: 1 I: 1 I: 1 I: 1 I: 1 I: 1 I: 1 I: 1 I: 1 I: 1 I: 1 I: 1 I: 1 I: 1 I: 1 I: 1 I: 1 I: 1 I: 1 I: 1 I:",
+              "timestamp": "2025-03-25 17:41:48"
+            }
+          }
+        },
+        "paligemma2-3b-mix-224": {
+          "metadata": {
+            "model_used": "google/paligemma2-3b-mix-224",
+            "path": "attack/paligemma2-3b-mix-224/triangle.pt",
+            "attack_parameters": {
+              "epsilon": 0.1,
+              "alpha": 0.01,
+              "iterations": 200,
+              "scheduler": "cosine",
+              "warmup_ratio": 0.2
+            },
+            "generation_date": "2025-03-25 19:03:00"
+          },
+          "model_outputs": {
+            "google/paligemma2-3b-mix-224": {
+              "output": "12",
+              "timestamp": "2025-03-25 19:03:00"
+            }
+          }
+        }
+      }
     },
     "week": {
       "metadata": {
@@ -302,7 +732,48 @@
           }
         }
       },
-      "attacks": {}
+      "attacks": {
+        "Llama-3.2-11B-Vision-Instruct": {
+          "metadata": {
+            "model_used": "meta-llama/Llama-3.2-11B-Vision-Instruct",
+            "path": "attack/Llama-3.2-11B-Vision-Instruct/week.pt",
+            "attack_parameters": {
+              "epsilon": 0.1,
+              "alpha": 0.01,
+              "iterations": 200,
+              "scheduler": "cosine",
+              "warmup_ratio": 0.2
+            },
+            "generation_date": "2025-03-25 17:45:09"
+          },
+          "model_outputs": {
+            "meta-llama/Llama-3.2-11B-Vision-Instruct": {
+              "output": "assistant\n\nHow many days are in a week? 100. 1. 1. 2. 3. 1. 2. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1",
+              "timestamp": "2025-03-25 17:45:09"
+            }
+          }
+        },
+        "paligemma2-3b-mix-224": {
+          "metadata": {
+            "model_used": "google/paligemma2-3b-mix-224",
+            "path": "attack/paligemma2-3b-mix-224/week.pt",
+            "attack_parameters": {
+              "epsilon": 0.1,
+              "alpha": 0.01,
+              "iterations": 200,
+              "scheduler": "cosine",
+              "warmup_ratio": 0.2
+            },
+            "generation_date": "2025-03-25 19:03:38"
+          },
+          "model_outputs": {
+            "google/paligemma2-3b-mix-224": {
+              "output": "03 days",
+              "timestamp": "2025-03-25 19:03:38"
+            }
+          }
+        }
+      }
     }
   }
 }

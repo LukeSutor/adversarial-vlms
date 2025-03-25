@@ -271,7 +271,7 @@ def resize_images_with_padding(directory_path, target_size=(224, 224), fill_colo
     
     print(f"Finished processing {len(image_files)} images in {directory_path}")
 
-def update_image_data_json(attack_file, model_id, model_output, attack_params=None, json_path=None):
+def update_image_data_json(attack_file, model_id, model_output=None, attack_params=None, json_path=None):
     """
     Update the image_data.json file with model inference results for an attack image.
     Uses the new hierarchical data structure.
@@ -359,10 +359,11 @@ def update_image_data_json(attack_file, model_id, model_output, attack_params=No
         }
     
     # Add or update the model output for this attack
-    data["images"][image_name]["attacks"][model_name]["model_outputs"][model_id] = {
-        "output": model_output,
-        "timestamp": timestamp
-    }
+    if model_output:
+        data["images"][image_name]["attacks"][model_name]["model_outputs"][model_id] = {
+            "output": model_output,
+            "timestamp": timestamp
+        }
     
     # Write updated data back to file
     try:

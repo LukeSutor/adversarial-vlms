@@ -298,9 +298,6 @@ def run_inference_llama(
     
     # Check if input is already a tensor (from an attack)
     if isinstance(image_input, torch.Tensor):
-        # Print incoming tensor shape for debugging
-        print(f"Input tensor shape: {image_input.shape}")
-        
         # Get the tensor shape
         tensor_shape = image_input.shape
         
@@ -325,7 +322,6 @@ def run_inference_llama(
         
         # Get the expected shape from the processor's output
         expected_shape = inputs['pixel_values'].shape
-        print(f"Expected tensor shape: {expected_shape}")
         
         # If the input tensor is 4D [1, 3, H, W] and we need 6D [1, 1, 4, 3, H, W]
         if len(tensor_shape) == 4 and len(expected_shape) == 6:
@@ -344,7 +340,6 @@ def run_inference_llama(
             
             # Replace the pixel_values with our properly structured tensor
             inputs['pixel_values'] = new_tensor
-            print(f"Restructured tensor shape: {inputs['pixel_values'].shape}")
         else:
             # Direct replacement if shapes already match
             inputs['pixel_values'] = image_input.to(model.device)
