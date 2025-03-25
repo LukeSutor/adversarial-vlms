@@ -60,6 +60,26 @@
               "timestamp": "2025-03-25 17:04:52"
             }
           }
+        },
+        "paligemma2-10b-mix-224": {
+          "metadata": {
+            "model_used": "google/paligemma2-10b-mix-224",
+            "path": "attack/paligemma2-10b-mix-224/boiling.pt",
+            "attack_parameters": {
+              "epsilon": 0.1,
+              "alpha": 0.01,
+              "iterations": 200,
+              "scheduler": "cosine",
+              "warmup_ratio": 0.2
+            },
+            "generation_date": "2025-03-25 19:29:36"
+          },
+          "model_outputs": {
+            "google/paligemma2-3b-mix-224": {
+              "output": "d. 130",
+              "timestamp": "2025-03-25 19:46:06"
+            }
+          }
         }
       }
     },
@@ -123,6 +143,26 @@
               "timestamp": "2025-03-25 17:08:16"
             }
           }
+        },
+        "paligemma2-10b-mix-224": {
+          "metadata": {
+            "model_used": "google/paligemma2-10b-mix-224",
+            "path": "attack/paligemma2-10b-mix-224/capital.pt",
+            "attack_parameters": {
+              "epsilon": 0.1,
+              "alpha": 0.01,
+              "iterations": 200,
+              "scheduler": "cosine",
+              "warmup_ratio": 0.2
+            },
+            "generation_date": "2025-03-25 19:30:32"
+          },
+          "model_outputs": {
+            "google/paligemma2-3b-mix-224": {
+              "output": "a",
+              "timestamp": "2025-03-25 19:46:07"
+            }
+          }
         }
       }
     },
@@ -180,6 +220,26 @@
             "google/paligemma2-3b-mix-224": {
               "output": "D. Chicken!",
               "timestamp": "2025-03-25 18:57:19"
+            }
+          }
+        },
+        "paligemma2-10b-mix-224": {
+          "metadata": {
+            "model_used": "google/paligemma2-10b-mix-224",
+            "path": "attack/paligemma2-10b-mix-224/cow.pt",
+            "attack_parameters": {
+              "epsilon": 0.1,
+              "alpha": 0.01,
+              "iterations": 200,
+              "scheduler": "cosine",
+              "warmup_ratio": 0.2
+            },
+            "generation_date": "2025-03-25 19:31:27"
+          },
+          "model_outputs": {
+            "google/paligemma2-3b-mix-224": {
+              "output": "b. milk",
+              "timestamp": "2025-03-25 19:46:08"
             }
           }
         }
@@ -241,6 +301,26 @@
               "timestamp": "2025-03-25 18:57:57"
             }
           }
+        },
+        "paligemma2-10b-mix-224": {
+          "metadata": {
+            "model_used": "google/paligemma2-10b-mix-224",
+            "path": "attack/paligemma2-10b-mix-224/friend.pt",
+            "attack_parameters": {
+              "epsilon": 0.1,
+              "alpha": 0.01,
+              "iterations": 200,
+              "scheduler": "cosine",
+              "warmup_ratio": 0.2
+            },
+            "generation_date": "2025-03-25 19:32:22"
+          },
+          "model_outputs": {
+            "google/paligemma2-3b-mix-224": {
+              "output": "dog",
+              "timestamp": "2025-03-25 19:46:08"
+            }
+          }
         }
       }
     },
@@ -298,6 +378,26 @@
             "google/paligemma2-3b-mix-224": {
               "output": "A. apple",
               "timestamp": "2025-03-25 18:58:35"
+            }
+          }
+        },
+        "paligemma2-10b-mix-224": {
+          "metadata": {
+            "model_used": "google/paligemma2-10b-mix-224",
+            "path": "attack/paligemma2-10b-mix-224/fruit.pt",
+            "attack_parameters": {
+              "epsilon": 0.1,
+              "alpha": 0.01,
+              "iterations": 200,
+              "scheduler": "cosine",
+              "warmup_ratio": 0.2
+            },
+            "generation_date": "2025-03-25 19:33:17"
+          },
+          "model_outputs": {
+            "google/paligemma2-3b-mix-224": {
+              "output": "b. orange",
+              "timestamp": "2025-03-25 19:46:08"
             }
           }
         }
@@ -359,6 +459,26 @@
               "timestamp": "2025-03-25 18:59:12"
             }
           }
+        },
+        "paligemma2-10b-mix-224": {
+          "metadata": {
+            "model_used": "google/paligemma2-10b-mix-224",
+            "path": "attack/paligemma2-10b-mix-224/hot.pt",
+            "attack_parameters": {
+              "epsilon": 0.1,
+              "alpha": 0.01,
+              "iterations": 200,
+              "scheduler": "cosine",
+              "warmup_ratio": 0.2
+            },
+            "generation_date": "2025-03-25 19:34:12"
+          },
+          "model_outputs": {
+            "google/paligemma2-3b-mix-224": {
+              "output": "cold",
+              "timestamp": "2025-03-25 19:46:09"
+            }
+          }
         }
       }
     },
@@ -416,6 +536,26 @@
             "google/paligemma2-3b-mix-224": {
               "output": "3",
               "timestamp": "2025-03-25 18:59:50"
+            }
+          }
+        },
+        "paligemma2-10b-mix-224": {
+          "metadata": {
+            "model_used": "google/paligemma2-10b-mix-224",
+            "path": "attack/paligemma2-10b-mix-224/math.pt",
+            "attack_parameters": {
+              "epsilon": 0.1,
+              "alpha": 0.01,
+              "iterations": 200,
+              "scheduler": "cosine",
+              "warmup_ratio": 0.2
+            },
+            "generation_date": "2025-03-25 19:35:07"
+          },
+          "model_outputs": {
+            "google/paligemma2-3b-mix-224": {
+              "output": "4",
+              "timestamp": "2025-03-25 19:46:09"
             }
           }
         }
@@ -477,6 +617,26 @@
               "timestamp": "2025-03-25 19:00:28"
             }
           }
+        },
+        "paligemma2-10b-mix-224": {
+          "metadata": {
+            "model_used": "google/paligemma2-10b-mix-224",
+            "path": "attack/paligemma2-10b-mix-224/month.pt",
+            "attack_parameters": {
+              "epsilon": 0.1,
+              "alpha": 0.01,
+              "iterations": 200,
+              "scheduler": "cosine",
+              "warmup_ratio": 0.2
+            },
+            "generation_date": "2025-03-25 19:36:02"
+          },
+          "model_outputs": {
+            "google/paligemma2-3b-mix-224": {
+              "output": "c. february",
+              "timestamp": "2025-03-25 19:46:09"
+            }
+          }
         }
       }
     },
@@ -534,6 +694,26 @@
             "google/paligemma2-3b-mix-224": {
               "output": "A",
               "timestamp": "2025-03-25 19:01:06"
+            }
+          }
+        },
+        "paligemma2-10b-mix-224": {
+          "metadata": {
+            "model_used": "google/paligemma2-10b-mix-224",
+            "path": "attack/paligemma2-10b-mix-224/planet.pt",
+            "attack_parameters": {
+              "epsilon": 0.1,
+              "alpha": 0.01,
+              "iterations": 200,
+              "scheduler": "cosine",
+              "warmup_ratio": 0.2
+            },
+            "generation_date": "2025-03-25 19:36:57"
+          },
+          "model_outputs": {
+            "google/paligemma2-3b-mix-224": {
+              "output": "a",
+              "timestamp": "2025-03-25 19:46:09"
             }
           }
         }
@@ -595,6 +775,26 @@
               "timestamp": "2025-03-25 19:01:44"
             }
           }
+        },
+        "paligemma2-10b-mix-224": {
+          "metadata": {
+            "model_used": "google/paligemma2-10b-mix-224",
+            "path": "attack/paligemma2-10b-mix-224/round.pt",
+            "attack_parameters": {
+              "epsilon": 0.1,
+              "alpha": 0.01,
+              "iterations": 200,
+              "scheduler": "cosine",
+              "warmup_ratio": 0.2
+            },
+            "generation_date": "2025-03-25 19:37:52"
+          },
+          "model_outputs": {
+            "google/paligemma2-3b-mix-224": {
+              "output": "circle",
+              "timestamp": "2025-03-25 19:46:09"
+            }
+          }
         }
       }
     },
@@ -652,6 +852,26 @@
             "google/paligemma2-3b-mix-224": {
               "output": "D. Yellow",
               "timestamp": "2025-03-25 19:02:22"
+            }
+          }
+        },
+        "paligemma2-10b-mix-224": {
+          "metadata": {
+            "model_used": "google/paligemma2-10b-mix-224",
+            "path": "attack/paligemma2-10b-mix-224/sky.pt",
+            "attack_parameters": {
+              "epsilon": 0.1,
+              "alpha": 0.01,
+              "iterations": 200,
+              "scheduler": "cosine",
+              "warmup_ratio": 0.2
+            },
+            "generation_date": "2025-03-25 19:38:47"
+          },
+          "model_outputs": {
+            "google/paligemma2-3b-mix-224": {
+              "output": "blue",
+              "timestamp": "2025-03-25 19:46:09"
             }
           }
         }
@@ -713,6 +933,26 @@
               "timestamp": "2025-03-25 19:03:00"
             }
           }
+        },
+        "paligemma2-10b-mix-224": {
+          "metadata": {
+            "model_used": "google/paligemma2-10b-mix-224",
+            "path": "attack/paligemma2-10b-mix-224/triangle.pt",
+            "attack_parameters": {
+              "epsilon": 0.1,
+              "alpha": 0.01,
+              "iterations": 200,
+              "scheduler": "cosine",
+              "warmup_ratio": 0.2
+            },
+            "generation_date": "2025-03-25 19:39:42"
+          },
+          "model_outputs": {
+            "google/paligemma2-3b-mix-224": {
+              "output": "3",
+              "timestamp": "2025-03-25 19:46:10"
+            }
+          }
         }
       }
     },
@@ -770,6 +1010,26 @@
             "google/paligemma2-3b-mix-224": {
               "output": "03 days",
               "timestamp": "2025-03-25 19:03:38"
+            }
+          }
+        },
+        "paligemma2-10b-mix-224": {
+          "metadata": {
+            "model_used": "google/paligemma2-10b-mix-224",
+            "path": "attack/paligemma2-10b-mix-224/week.pt",
+            "attack_parameters": {
+              "epsilon": 0.1,
+              "alpha": 0.01,
+              "iterations": 200,
+              "scheduler": "cosine",
+              "warmup_ratio": 0.2
+            },
+            "generation_date": "2025-03-25 19:40:39"
+          },
+          "model_outputs": {
+            "google/paligemma2-3b-mix-224": {
+              "output": "7",
+              "timestamp": "2025-03-25 19:46:10"
             }
           }
         }

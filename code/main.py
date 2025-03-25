@@ -74,6 +74,7 @@ def attack(input_image_path, model_id, target_sequence, prompt, epsilon=0.1,
     # Get the filename without extension for JSON entry
     attack_filename = get_clean_filename(tensor_path)
     
+    inference_result = None
     # Run inference with the attacked image to get the model's response
     print("\nEvaluating attack results...")
     inference_result = run_inference(model_id, prompt, tensor_image)

@@ -34,7 +34,7 @@ def process_image_batch():
     os.makedirs(attack_dir, exist_ok=True)
     
     # Select model to use for all attacks
-    model = Models.PALIGEMMA2_3B
+    model = Models.PALIGEMMA2_10B
     print(f"Using model: {model}")
     
     # Load image data
