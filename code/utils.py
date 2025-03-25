@@ -291,7 +291,7 @@ def update_image_data_json(attack_file, model_id, model_output, attack_params=No
     image_dir = os.path.join(script_path, "../images")
     
     # Set default json_path if not provided
-    if json_path is None:
+    if (json_path is None):
         json_path = os.path.join(image_dir, "image_data.json")
     
     # Load existing JSON data or create empty structure
@@ -492,3 +492,45 @@ def get_clean_filename(image_path):
         Filename without extension
     """
     return os.path.splitext(os.path.basename(image_path))[0]
+
+def save_tensor_as_png(tensor_path, normalize=True):
+    """
+    Load a tensor from a .pt file and save it as a PNG image in the same directory.
+    
+    Args:
+        tensor_path: Path to the tensor file (.pt)
+        normalize: Whether to normalize pixel values to [0, 1] range
+        
+    Returns:
+        Path to the saved PNG file
+    """
+    # Check if the file exists
+    if not os.path.exists(tensor_path):
+        raise FileNotFoundError(f"Tensor file not found: {tensor_path}")
+    
+    # Load the tensor
+    tensor_image = load_image_tensor(tensor_path)
+    print(f"Loaded tensor with shape: {tensor_image.shape}")
+    
+    # Handle different tensor shapes based on model architecture
+    # We need to extract a valid image tensor with shape [C, H, W] or [1, C, H, W]
+    
+    if len(tensor_image.shape) > 4:
+        # Complex shape like [1, 1, 4, 3, H, W] (Llama) - extract first image
+        if tensor_image.shape[2] > 1 and len(tensor_image.shape) >= 6:
+            # This is likely a Llama tensor with multiple crops
+            # Extract the first crop (index 0)
+            tensor_image = tensor_image[0, 0, 0]
+            print(f"Extracted image from Llama tensor, new shape: {tensor_image.shape}")
+    
+    # Convert to PIL image
+    pil_image = convert_tensor_to_pil(tensor_image)
+    
+    # Create output path (same directory, .png extension)
+    output_path = os.path.splitext(tensor_path)[0] + '.png'
+    
+    # Save the image
+    pil_image.save(output_path)
+    print(f"Saved PNG image to: {output_path}")
+    
+    return output_path
