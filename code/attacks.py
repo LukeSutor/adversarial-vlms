@@ -148,7 +148,7 @@ class BasePGDAttack:
     
     def __init__(self, model_id, epsilon=0.02, alpha_max=0.01, alpha_min=0.0001, 
                  num_iter=10, token_lookahead=3, warmup_ratio=0.1, 
-                 scheduler_type="cosine"):
+                 scheduler_type="cosine", return_best=True):
         self.model_id = model_id
         self.epsilon = epsilon
         self.alpha_max = alpha_max
@@ -157,6 +157,7 @@ class BasePGDAttack:
         self.token_lookahead = token_lookahead
         self.warmup_ratio = warmup_ratio
         self.scheduler_type = scheduler_type
+        self.return_best = return_best
         
         # Get the alpha scheduler function
         self.alpha_scheduler = AlphaScheduler.get_scheduler(scheduler_type)
@@ -335,9 +336,11 @@ class BasePGDAttack:
             print()
 
         # Use the best image found during optimization
-        if best_prob > 0.0:
+        if best_prob > 0.0 and self.return_best:
             print(f"\nUsing best image with probability {best_prob:.4f}")
             processed_image = best_image
+        else:
+            print(f"\nUsing final image")
 
         # Save the tensor version before any transformations
         tensor_image = processed_image.clone()
@@ -683,9 +686,11 @@ class LlamaAttack(BasePGDAttack):
             print()
         
         # Use the best image found during optimization
-        if best_prob > 0.0:
+        if best_prob > 0.0 and self.return_best:
             print(f"\nUsing best image with probability {best_prob:.4f}")
             base_image = best_image
+        else:
+            print(f"\nUsing final image")
         
         # Create the final tensor with shape [1, 3, H, W]
         if len(base_image.shape) > 4:
@@ -907,9 +912,11 @@ class LlavaAttack(BasePGDAttack):
         print(f"Original image is equal to processed image: {is_equal}")
         
         # Use the best image found during optimization
-        if best_prob > 0.0:
+        if best_prob > 0.0 and self.return_best:
             print(f"\nUsing best image with probability {best_prob:.4f}")
             processed_image = best_image
+        else:
+            print(f"\nUsing final image")
             
         # The tensor retains the exact values without quantization
         tensor_image = processed_image.clone()
@@ -919,7 +926,7 @@ class LlavaAttack(BasePGDAttack):
 
 def pgd_attack(model_id, prompt, image_path, target_sequence, 
                epsilon=0.02, alpha_max=0.01, alpha_min=0.0001, num_iter=10, 
-               token_lookahead=3, warmup_ratio=0.1, scheduler_type="cosine"):
+               token_lookahead=3, warmup_ratio=0.1, scheduler_type="cosine", return_best=True):
     """
     Factory function that creates and executes the appropriate PGD attack
     based on the model type.
@@ -952,7 +959,8 @@ def pgd_attack(model_id, prompt, image_path, target_sequence,
         num_iter=num_iter,
         token_lookahead=token_lookahead,
         warmup_ratio=warmup_ratio,
-        scheduler_type=scheduler_type
+        scheduler_type=scheduler_type,
+        return_best=return_best
     )
     
     return attack.pgd_attack(prompt, image_path, target_sequence)
