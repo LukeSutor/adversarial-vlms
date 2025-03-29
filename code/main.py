@@ -364,7 +364,7 @@ if __name__ == "__main__":
     # attack("/blue/rcstudents/luke.sutor/adversarial-vlms/images/clean/boiling.png", Models.LLAMA_3_2_11B_VISION, "A", "Answer the question")
     
     # Example of evaluating attack images with multiple models
-    evaluate_attack_images([Models.PALIGEMMA2_3B])
+    evaluate_attack_images([Models.LLAVA_1_5_13B])
 
     # Alternatively, run the clean image evaluation
-    # evaluate_clean_images([Models.PALIGEMMA2_3B])
+    evaluate_clean_images([Models.LLAVA_1_5_13B])
