@@ -2,3 +2,6 @@ documents
 PaliGemma
 .env
 models
+
+**/__pycache__/**
+*.pyc

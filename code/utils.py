@@ -535,3 +535,57 @@ def save_tensor_as_png(tensor_path, normalize=True):
     print(f"Saved PNG image to: {output_path}")
     
     return output_path
+
+def calculate_image_difference(img0_path, img1_path, output_path=None, amplify_factor=1.0):
+    """
+    Calculate the pixel-wise difference between two images and save it as a PNG.
+    
+    Args:
+        img0_path: Path to the first image (original/clean)
+        img1_path: Path to the second image (attacked/modified)
+        output_path: Path to save the difference image (if None, generates based on input names)
+        amplify_factor: Factor to amplify the difference for better visualization (default: 1.0)
+        
+    Returns:
+        Path to the saved difference image
+    """
+    # Load the images
+    img0 = Image.open(img0_path).convert('RGB')
+    img1 = Image.open(img1_path).convert('RGB')
+    
+    # Ensure images are the same size
+    if img0.size != img1.size:
+        print(f"Warning: Image sizes don't match. Resizing second image to match first.")
+        img1 = img1.resize(img0.size)
+    
+    # Convert to numpy arrays
+    img0_np = np.array(img0).astype(np.float32)
+    img1_np = np.array(img1).astype(np.float32)
+    
+    # Calculate difference
+    diff = img1_np - img0_np
+    
+    # Apply amplification for better visualization
+    if amplify_factor != 1.0:
+        diff = diff * amplify_factor
+    
+    # Show directional difference (centered at 128 gray)
+    # Values > 128 indicate pixels that got brighter
+    # Values < 128 indicate pixels that got darker
+    diff_vis = np.clip(diff + 128, 0, 255).astype(np.uint8)
+    
+    # Create PIL image from diff
+    diff_img = Image.fromarray(diff_vis)
+    
+    # Generate output path if not provided
+    if output_path is None:
+        img0_name = os.path.splitext(os.path.basename(img0_path))[0]
+        img1_name = os.path.splitext(os.path.basename(img1_path))[0]
+        output_dir = os.path.dirname(img0_path)
+        output_path = os.path.join(output_dir, f"diff_{img0_name}_vs_{img1_name}.png")
+    
+    # Save the difference image
+    diff_img.save(output_path)
+    print(f"Saved difference image to: {output_path}")
+    
+    return output_path
