@@ -4,7 +4,7 @@ from utils import save_tensor_as_png
 
 def main():
     # Specify the tensor file path
-    tensor_path = "C:/Users/Luke/Desktop/UF/Artificial_Intelligence_Scholars/2024/images/attack/paligemma2-3b-mix-224/capital.pt"
+    tensor_path = "C:/Users/Luke/Desktop/UF/Artificial_Intelligence_Scholars/2024/images/attack/paligemma2-3b-mix-224/cow.pt"
     
     # Check if the file exists
     if not os.path.exists(tensor_path):

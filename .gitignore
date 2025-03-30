@@ -4,4 +4,4 @@ PaliGemma
 models
 
 **/__pycache__/**
-*.pyc
+**/*.pyc

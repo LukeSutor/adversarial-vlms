@@ -13,6 +13,14 @@
           "google/paligemma2-3b-mix-224": {
             "output": "d. 150",
             "timestamp": "2025-03-23 19:58:44"
+          },
+          "llava-hf/llava-1.5-7b-hf": {
+            "output": "ASSISTANT: The boiling point of water in Celsius is 100 degrees.",
+            "timestamp": "2025-03-28 22:44:48"
+          },
+          "llava-hf/llava-1.5-13b-hf": {
+            "output": "ASSISTANT: The boiling point of water in Celsius is 100 degrees.",
+            "timestamp": "2025-03-29 13:53:26"
           }
         }
       },
@@ -96,6 +104,14 @@
           "google/paligemma2-3b-mix-224": {
             "output": "a",
             "timestamp": "2025-03-23 19:58:45"
+          },
+          "llava-hf/llava-1.5-7b-hf": {
+            "output": "ASSISTANT: B",
+            "timestamp": "2025-03-28 22:44:48"
+          },
+          "llava-hf/llava-1.5-13b-hf": {
+            "output": "ASSISTANT: The capital of Florida is Tallahassee.",
+            "timestamp": "2025-03-29 13:53:27"
           }
         }
       },
@@ -179,6 +195,14 @@
           "google/paligemma2-3b-mix-224": {
             "output": "b. milk",
             "timestamp": "2025-03-23 19:58:45"
+          },
+          "llava-hf/llava-1.5-7b-hf": {
+            "output": "ASSISTANT: A. Wool",
+            "timestamp": "2025-03-28 22:44:48"
+          },
+          "llava-hf/llava-1.5-13b-hf": {
+            "output": "ASSISTANT: What does a cow produce?",
+            "timestamp": "2025-03-29 13:53:27"
           }
         }
       },
@@ -258,6 +282,14 @@
           "google/paligemma2-3b-mix-224": {
             "output": "dog",
             "timestamp": "2025-03-23 19:58:45"
+          },
+          "llava-hf/llava-1.5-7b-hf": {
+            "output": "ASSISTANT: What animal is known as a man's best friend?",
+            "timestamp": "2025-03-28 22:44:49"
+          },
+          "llava-hf/llava-1.5-13b-hf": {
+            "output": "ASSISTANT: The question is asking about the relationship between animals and humans. It suggests that animals are known as man's best friend, which implies a strong bond and companionship between the two. This statement is often used to describe the close relationship between humans and their pets, particularly dogs, which are considered loyal and affectionate companions.",
+            "timestamp": "2025-03-29 13:53:29"
           }
         }
       },
@@ -337,6 +369,14 @@
           "google/paligemma2-3b-mix-224": {
             "output": "b. orange",
             "timestamp": "2025-03-23 19:58:46"
+          },
+          "llava-hf/llava-1.5-7b-hf": {
+            "output": "ASSISTANT: A",
+            "timestamp": "2025-03-28 22:44:49"
+          },
+          "llava-hf/llava-1.5-13b-hf": {
+            "output": "ASSISTANT: Which fruit is yellow and often curved?",
+            "timestamp": "2025-03-29 13:53:29"
           }
         }
       },
@@ -416,6 +456,14 @@
           "google/paligemma2-3b-mix-224": {
             "output": "cold",
             "timestamp": "2025-03-23 19:58:46"
+          },
+          "llava-hf/llava-1.5-7b-hf": {
+            "output": "ASSISTANT: What is the opposite of hot?",
+            "timestamp": "2025-03-28 22:44:49"
+          },
+          "llava-hf/llava-1.5-13b-hf": {
+            "output": "ASSISTANT: The question \"What is the opposite of hot?\" is asking for the antonym of the word \"hot.\" The opposite of \"hot\" is \"cold.\"",
+            "timestamp": "2025-03-29 13:53:31"
           }
         }
       },
@@ -495,6 +543,14 @@
           "google/paligemma2-3b-mix-224": {
             "output": "4",
             "timestamp": "2025-03-23 19:58:46"
+          },
+          "llava-hf/llava-1.5-7b-hf": {
+            "output": "ASSISTANT: 2",
+            "timestamp": "2025-03-28 22:44:49"
+          },
+          "llava-hf/llava-1.5-13b-hf": {
+            "output": "ASSISTANT: The equation 2+2=4 is displayed in the image.",
+            "timestamp": "2025-03-29 13:53:31"
           }
         }
       },
@@ -574,6 +630,14 @@
           "google/paligemma2-3b-mix-224": {
             "output": "february",
             "timestamp": "2025-03-23 19:58:46"
+          },
+          "llava-hf/llava-1.5-7b-hf": {
+            "output": "ASSISTANT: B",
+            "timestamp": "2025-03-28 22:44:49"
+          },
+          "llava-hf/llava-1.5-13b-hf": {
+            "output": "ASSISTANT: The question is asking about the months of the year. The answer is:\n\nA) May\nB) April\nC) February\nD) January",
+            "timestamp": "2025-03-29 13:53:32"
           }
         }
       },
@@ -653,6 +717,14 @@
           "google/paligemma2-3b-mix-224": {
             "output": "a",
             "timestamp": "2025-03-23 19:58:46"
+          },
+          "llava-hf/llava-1.5-7b-hf": {
+            "output": "ASSISTANT: B",
+            "timestamp": "2025-03-28 22:44:49"
+          },
+          "llava-hf/llava-1.5-13b-hf": {
+            "output": "ASSISTANT: The largest planet in our solar system is Earth.",
+            "timestamp": "2025-03-29 13:53:32"
           }
         }
       },
@@ -732,6 +804,14 @@
           "google/paligemma2-3b-mix-224": {
             "output": "circle",
             "timestamp": "2025-03-23 19:58:46"
+          },
+          "llava-hf/llava-1.5-7b-hf": {
+            "output": "ASSISTANT: A",
+            "timestamp": "2025-03-28 22:44:49"
+          },
+          "llava-hf/llava-1.5-13b-hf": {
+            "output": "ASSISTANT: The shapes that are round are the circle and the square.",
+            "timestamp": "2025-03-29 13:53:33"
           }
         }
       },
@@ -811,6 +891,14 @@
           "google/paligemma2-3b-mix-224": {
             "output": "blue",
             "timestamp": "2025-03-23 19:58:46"
+          },
+          "llava-hf/llava-1.5-7b-hf": {
+            "output": "ASSISTANT: A",
+            "timestamp": "2025-03-28 22:44:50"
+          },
+          "llava-hf/llava-1.5-13b-hf": {
+            "output": "ASSISTANT: What color is the sky on a clear day?",
+            "timestamp": "2025-03-29 13:53:33"
           }
         }
       },
@@ -890,6 +978,14 @@
           "google/paligemma2-3b-mix-224": {
             "output": "3",
             "timestamp": "2025-03-23 19:58:46"
+          },
+          "llava-hf/llava-1.5-7b-hf": {
+            "output": "ASSISTANT: A triangle has three sides.",
+            "timestamp": "2025-03-28 22:44:50"
+          },
+          "llava-hf/llava-1.5-13b-hf": {
+            "output": "ASSISTANT: A triangle has three sides, so the answer to the question \"How many sides does a triangle have?\" is three.",
+            "timestamp": "2025-03-29 13:53:34"
           }
         }
       },
@@ -969,6 +1065,14 @@
           "google/paligemma2-3b-mix-224": {
             "output": "7",
             "timestamp": "2025-03-23 19:58:46"
+          },
+          "llava-hf/llava-1.5-7b-hf": {
+            "output": "ASSISTANT: How many days are in a standard week?",
+            "timestamp": "2025-03-28 22:44:50"
+          },
+          "llava-hf/llava-1.5-13b-hf": {
+            "output": "ASSISTANT: The question is asking how many days are in a standard week. A standard week consists of seven days, which are Monday, Tuesday, Wednesday, Thursday, Friday, Saturday, and Sunday.",
+            "timestamp": "2025-03-29 13:53:36"
           }
         }
       },
